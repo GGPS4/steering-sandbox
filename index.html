@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Steering Sandbox</title>
-<meta name="description" content="Import FSAE steering hardpoints from Fusion 360 and see Ackermann, scrub radius, KPI, caster and bump steer. Tweak the geometry and compare against your CAD baseline.">
+<meta name="description" content="Import FSAE steering hardpoints from Fusion 360 and see Ackermann, scrub radius, KPI, caster and bump steer, and fit Pacejka tire curves to your tire data.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..900&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
@@ -111,6 +111,25 @@ pre.code{display:block;padding:10px;overflow-x:auto;white-space:pre;margin:8px 0
 footer{font:400 12px var(--mono);color:var(--ink-2);display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px}
 #drop{position:fixed;inset:0;background:rgba(30,85,214,.18);border:3px dashed var(--accent);display:grid;place-items:center;font:800 28px var(--display);color:var(--ink);z-index:9;pointer-events:none}
 .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+
+/* tire fitter */
+.tire{display:grid;grid-template-columns:1.3fr 1fr;gap:0}
+.tire > div{min-width:0}
+.tire .side{border-left:1px solid var(--rule);padding:12px 14px;display:flex;flex-direction:column;gap:10px}
+@media (max-width:900px){.tire{grid-template-columns:1fr}.tire .side{border-left:0;border-top:1px solid var(--rule)}}
+#tireChart{aspect-ratio:16/10}
+.tire-tools{display:flex;flex-wrap:wrap;gap:8px;padding:10px 14px;border-top:1px solid var(--rule);align-items:end}
+.tire-tools label{display:flex;flex-direction:column;gap:4px}
+.tire-tools select{padding:6px 8px;border:1px solid var(--rule);background:var(--paper);font:400 13px var(--mono)}
+#tireTable table{min-width:0;font-size:12.5px}
+#tireTable td,#tireTable th{padding:5px 6px}
+#tireTable th{text-transform:none;letter-spacing:.02em;font-size:11.5px}
+#tireTable td{font:400 12.5px var(--mono);white-space:nowrap}
+.swatch{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:6px;vertical-align:middle}
+.formula{font:400 13px var(--mono);background:var(--paper);border:1px solid var(--rule);padding:8px 10px;overflow-x:auto;white-space:nowrap}
+:root{--t1:#1E55D6;--t2:#11875B;--t3:#C2410C;--t4:#8B3FC7}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--t1:#5B86F0;--t2:#2FA879;--t3:#D96A30;--t4:#A874E8}}
+:root[data-theme="dark"]{--t1:#5B86F0;--t2:#2FA879;--t3:#D96A30;--t4:#A874E8}
 </style>
 </head>
 <body>
@@ -170,6 +189,28 @@ footer{font:400 12px var(--mono);color:var(--ink-2);display:flex;justify-content
     <div class="panel">
       <div class="panel-h"><h2>Bump steer</h2><span class="label">Toe change vs wheel travel</span></div>
       <canvas id="bumpChart" class="chart" aria-label="Toe change versus vertical wheel travel"></canvas>
+    </div>
+  </div>
+
+  <div class="panel" id="tires">
+    <div class="panel-h"><h2>Tire curve fitter</h2><span class="hint">Fits the Pacejka Magic Formula to lateral force vs slip angle, one curve per normal load.</span></div>
+    <div class="tire">
+      <div>
+        <canvas id="tireChart" aria-label="Lateral force versus slip angle with fitted Magic Formula curves per normal load"></canvas>
+        <div class="tire-tools">
+          <label class="btn primary" for="tireFile">Upload tire data</label>
+          <input id="tireFile" class="sr" type="file" accept=".csv,.txt,.dat">
+          <button class="btn" id="tireSample" type="button">Load sample tire</button>
+          <label><span class="label">Force units</span><select id="tireUnits"><option value="N">N</option><option value="lbf">lbf</option></select></label>
+          <button class="btn" id="tireCopy" type="button">Copy coefficients</button>
+        </div>
+      </div>
+      <div class="side">
+        <div id="tireStatus" class="hint">Sample tire loaded (synthetic 10 in FSAE tire, clearly not real test data).</div>
+        <div class="formula">F<sub>y</sub> = D·sin(C·atan(Bx − E(Bx − atan Bx))) + S<sub>v</sub>, &nbsp;x = α + S<sub>h</sub></div>
+        <div class="tbl-wrap" id="tireTable"></div>
+        <p class="hint" style="margin:0">CSV columns: slip angle (SA, deg or rad), lateral force (FY), and optionally normal load (FZ). TTC-style exports work. Loads are grouped automatically. C<sub>α</sub> = B·C·D is the cornering stiffness at zero slip. μ<sub>peak</sub> = |D| / F<sub>z</sub>.</p>
+      </div>
     </div>
   </div>
 
@@ -659,6 +700,98 @@ addEventListener('resize',()=>cur&&update());
 matchMedia('(prefers-color-scheme: dark)').addEventListener('change',()=>cur&&update());
 load(SAMPLE,'sample_hardpoints.csv');
 if(document.fonts)document.fonts.ready.then(()=>cur&&update());
+})();
+</script>
+
+<script>
+(function(){
+'use strict';
+const $=id=>document.getElementById(id);
+const css=n=>getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const COLS=['--t1','--t2','--t3','--t4'];
+function mf(p,a){const [B,C,D,E,Sh,Sv]=p,x=(a+Sh)*1,bx=B*x;return D*Math.sin(C*Math.atan(bx-E*(bx-Math.atan(bx))))+Sv;}
+function sse(p,pts){const [B,C,D,E]=p;let pen=0;if(C<0.3||C>3)pen+=1e12;if(E>1)pen+=1e12*(E-1);if(B<=0)pen+=1e12;let s=0;for(const [a,f] of pts){const r=mf(p,a)-f;s+=r*r;}return s+pen;}
+function nelder(f,x0,steps,iters=1400){const n=x0.length;let S=[x0.slice()];for(let i=0;i<n;i++){const x=x0.slice();x[i]+=steps[i];S.push(x);}
+  let F=S.map(f);for(let k=0;k<iters;k++){const idx=F.map((v,i)=>i).sort((a,b)=>F[a]-F[b]);S=idx.map(i=>S[i]);F=idx.map(i=>F[i]);
+    const c=Array(n).fill(0);for(let i=0;i<n;i++)for(let j=0;j<n;j++)c[j]+=S[i][j]/n;
+    const w=S[n],xr=c.map((v,j)=>v+(v-w[j])),fr=f(xr);
+    if(fr<F[0]){const xe=c.map((v,j)=>v+2*(v-w[j])),fe=f(xe);if(fe<fr){S[n]=xe;F[n]=fe;}else{S[n]=xr;F[n]=fr;}}
+    else if(fr<F[n-1]){S[n]=xr;F[n]=fr;}
+    else{const xc=c.map((v,j)=>v+.5*(w[j]-v)),fc=f(xc);if(fc<F[n]){S[n]=xc;F[n]=fc;}else{for(let i=1;i<=n;i++){S[i]=S[i].map((v,j)=>S[0][j]+.5*(v-S[0][j]));F[i]=f(S[i]);}}}
+    if(Math.abs(F[n]-F[0])<1e-10*(1+Math.abs(F[0])))break;}
+  const b=F.indexOf(Math.min(...F));return {x:S[b],f:F[b]};}
+function fit(pts){
+  const near=pts.filter(p=>Math.abs(p[0])<=1.5);let k=0;if(near.length>=3){const mx=near.reduce((s,p)=>s+p[0],0)/near.length,my=near.reduce((s,p)=>s+p[1],0)/near.length;let num=0,den=0;near.forEach(([a,f])=>{num+=(a-mx)*(f-my);den+=(a-mx)**2;});k=den?num/den:0;}
+  const sign=k<0?-1:1, D0=sign*Math.max(...pts.map(p=>Math.abs(p[1]))), C0=1.4, B0=Math.max(0.02,Math.abs(k)/(C0*Math.abs(D0))||0.2);
+  let best=null;[-1,0,0.5].forEach(E0=>{const r=nelder(p=>sse(p,pts),[B0,C0,D0,E0,0,0],[B0*.3,.2,Math.abs(D0)*.1,.3,.3,Math.abs(D0)*.02]);const r2=nelder(p=>sse(p,pts),r.x,[r.x[0]*.1,.05,Math.abs(r.x[2])*.03,.1,.1,Math.abs(D0)*.01]);if(!best||r2.f<best.f)best=r2;});
+  const p=best.x, my=pts.reduce((s,q)=>s+q[1],0)/pts.length, sst=pts.reduce((s,q)=>s+(q[1]-my)**2,0);
+  const lim=Math.max(...pts.map(q=>Math.abs(q[0])));let pk={a:0,f:0};for(let a=-lim;a<=lim;a+=0.05){const f=mf(p,a);if(Math.abs(f)>Math.abs(pk.f))pk={a,f};}
+  return {p,r2:1-best.f/sst,peak:pk,Ca:p[0]*p[1]*p[2]};
+}
+function sample(){const rows=['SA_deg,FY_N,FZ_N'];let seed=7;const rnd=()=>{seed=(seed*16807)%2147483647;return seed/2147483647-.5;};
+  [450,675,900].forEach(Fz=>{const mu=2.6-0.0006*Fz,D=mu*Fz,C=1.45,K=180+0.12*Fz,B=K/(C*D),E=0.2;
+    for(let a=-12;a<=12.001;a+=0.5){const f=mf([B,C,D,E,0.15,15],a)*(1+rnd()*0.05)+rnd()*20;rows.push([(a+rnd()*.1).toFixed(2),f.toFixed(1),(Fz+rnd()*20).toFixed(0)].join(','));}});
+  return rows.join('\n');}
+let groups=[], unitsNote='';
+function parse(text){
+  const lines=text.replace(/^﻿/,'').split(/\r?\n/).filter(l=>l.trim()&&!/^\s*#/.test(l));
+  const delim=[',',';','\t',' '].map(d=>[d,(lines[0]||'').trim().split(d===' '?/\s+/:d).length]).sort((a,b)=>b[1]-a[1])[0][0];
+  const split=l=>(delim===' '?l.trim().split(/\s+/):l.split(delim)).map(c=>c.trim().replace(/^"|"$/g,''));
+  let hi=lines.findIndex(l=>/(^|[^a-z])(sa|slip|alpha)/i.test(l)&&/fy|force|lat/i.test(l));
+  if(hi<0)throw new Error('Could not find the header row. Name the columns SA (slip angle), FY (lateral force) and optionally FZ (normal load).');
+  const H=split(lines[hi]).map(h=>h.toLowerCase());
+  const ci=re=>H.findIndex(h=>re.test(h));
+  const ia=ci(/^(sa|slip|alpha)|slip.?angle/),iy=ci(/^fy|lateral|lat.?force|^force/),iz=ci(/^fz|normal|load|vertical/);
+  if(ia<0||iy<0)throw new Error('Need a slip angle column (SA) and a lateral force column (FY).');
+  let rows=[];for(const l of lines.slice(hi+1)){const c=split(l),a=parseFloat(c[ia]),f=parseFloat(c[iy]),z=iz>=0?Math.abs(parseFloat(c[iz])):0;if(isFinite(a)&&isFinite(f))rows.push([a,f,isFinite(z)?z:0]);}
+  if(rows.length<8)throw new Error('Found fewer than 8 data rows.');
+  const maxA=Math.max(...rows.map(r=>Math.abs(r[0])));unitsNote='';
+  if(maxA<0.6){rows=rows.map(r=>[r[0]*180/Math.PI,r[1],r[2]]);unitsNote=' Slip angles looked like radians and were converted to degrees.';}
+  // group by load
+  const byZ=[];rows.sort((a,b)=>a[2]-b[2]).forEach(r=>{const g=byZ[byZ.length-1];if(g&&Math.abs(r[2]-g.z)<=Math.max(25,0.08*g.z)){g.pts.push([r[0],r[1]]);g.sum+=r[2];g.z=g.sum/g.pts.length;}else byZ.push({z:r[2],sum:r[2],pts:[[r[0],r[1]]]});});
+  return byZ.filter(g=>g.pts.length>=8).sort((a,b)=>b.pts.length-a.pts.length).slice(0,4).sort((a,b)=>a.z-b.z);
+}
+function run(text,name){
+  try{const gs=parse(text);$('tireStatus').textContent='Fitting…';
+    groups=gs.map(g=>({...g,fit:fit(g.pts)}));
+    $('tireStatus').innerHTML=name?`<b>${name.replace(/[<>&]/g,'')}</b>: fitted ${groups.length} load case${groups.length>1?'s':''} from ${groups.reduce((s,g)=>s+g.pts.length,0)} points.${unitsNote}`:'Sample tire loaded (synthetic 10 in FSAE tire, not real test data).';
+    table();draw();
+  }catch(e){$('tireStatus').innerHTML='<b>Could not fit that file.</b> '+e.message;}
+}
+function table(){const u=$('tireUnits').value;
+  $('tireTable').innerHTML=`<table><thead><tr><th>F<sub>z</sub></th><th>B</th><th>C</th><th>D</th><th>E</th><th>Peak</th><th>C<sub>α</sub></th><th>μ</th><th>R²</th></tr></thead><tbody>${groups.map((g,i)=>{const [B,C,D,E]=g.fit.p;return `<tr><td><span class="swatch" style="background:var(${COLS[i]})"></span>${g.z?g.z.toFixed(0):'–'}</td><td>${B.toFixed(3)}</td><td>${C.toFixed(2)}</td><td>${D.toFixed(0)}</td><td>${E.toFixed(2)}</td><td>${Math.abs(g.fit.peak.f).toFixed(0)} @ ${Math.abs(g.fit.peak.a).toFixed(1)}°</td><td>${Math.abs(g.fit.Ca).toFixed(0)}</td><td>${g.z?(Math.abs(D)/g.z).toFixed(2):'–'}</td><td>${g.fit.r2.toFixed(3)}</td></tr>`;}).join('')}</tbody></table><div class="hint" style="margin-top:4px">Forces in ${u}, C<sub>α</sub> in ${u}/deg.</div>`;}
+function draw(){
+  const cv=$('tireChart'),d=Math.min(2,devicePixelRatio||1),w=cv.clientWidth,h=cv.clientHeight;cv.width=w*d;cv.height=h*d;const c=cv.getContext('2d');c.setTransform(d,0,0,d,0,0);c.clearRect(0,0,w,h);
+  if(!groups.length)return;
+  const ink2=css('--ink-2'),rule=css('--rule'),ink=css('--ink'),sheet=css('--sheet'),u=$('tireUnits').value;
+  const all=groups.flatMap(g=>g.pts);const amax=Math.ceil(Math.max(...all.map(p=>Math.abs(p[0])))/2)*2||12;
+  const fmaxRaw=Math.max(...all.map(p=>Math.abs(p[1])))*1.08, st=[100,200,250,500,1000,2000].find(s=>fmaxRaw/s<=5)||5000, fmax=Math.ceil(fmaxRaw/st)*st;
+  const m={l:52,r:70,t:14,b:36},W=w-m.l-m.r,H=h-m.t-m.b,X=a=>m.l+(a+amax)/(2*amax)*W,Y=f=>m.t+H/2-f/fmax*H/2;
+  c.font='400 10.5px "IBM Plex Mono",monospace';
+  for(let a=-amax;a<=amax;a+=amax>12?4:2){c.strokeStyle=rule;c.globalAlpha=a?0.5:1;c.beginPath();c.moveTo(X(a),m.t);c.lineTo(X(a),m.t+H);c.stroke();c.globalAlpha=1;c.fillStyle=ink2;c.textAlign='center';c.fillText(a,X(a),m.t+H+14);}
+  for(let f=-fmax;f<=fmax;f+=st){c.strokeStyle=rule;c.globalAlpha=f?0.5:1;c.beginPath();c.moveTo(m.l,Y(f));c.lineTo(m.l+W,Y(f));c.stroke();c.globalAlpha=1;c.fillStyle=ink2;c.textAlign='right';c.fillText(f,m.l-6,Y(f)+3.5);}
+  c.strokeStyle=ink;c.lineWidth=1;c.strokeRect(m.l,m.t,W,H);
+  c.fillStyle=ink2;c.textAlign='center';c.fillText('slip angle α (deg)',m.l+W/2,h-6);c.save();c.translate(12,m.t+H/2);c.rotate(-Math.PI/2);c.fillText('lateral force Fy ('+u+')',0,0);c.restore();
+  c.save();c.beginPath();c.rect(m.l,m.t,W,H);c.clip();
+  const labels=[];
+  groups.forEach((g,i)=>{const col=css(COLS[i]);const step=Math.max(1,Math.floor(g.pts.length/400));
+    c.fillStyle=col;c.globalAlpha=.35;for(let k=0;k<g.pts.length;k+=step){const [a,f]=g.pts[k];c.beginPath();c.arc(X(a),Y(f),2.2,0,7);c.fill();}c.globalAlpha=1;
+    c.strokeStyle=col;c.lineWidth=2;c.beginPath();for(let a=-amax;a<=amax+1e-9;a+=amax/150){const f=mf(g.fit.p,a);a===-amax?c.moveTo(X(a),Y(f)):c.lineTo(X(a),Y(f));}c.stroke();
+    labels.push({y:Y(mf(g.fit.p,amax)),t:g.z?g.z.toFixed(0)+' '+u:'curve '+(i+1),col});});
+  c.restore();
+  labels.sort((a,b)=>a.y-b.y);for(let k=1;k<labels.length;k++)if(labels[k].y-labels[k-1].y<14)labels[k].y=labels[k-1].y+14;
+  labels.forEach(L=>{c.fillStyle=L.col;c.fillRect(m.l+W+4,L.y-1,8,2);c.fillStyle=ink;c.textAlign='left';c.font='500 11px "IBM Plex Mono",monospace';c.fillText(L.t,m.l+W+15,L.y+4);});
+}
+$('tireFile').addEventListener('change',e=>{const f=e.target.files[0];if(!f)return;f.text().then(t=>run(t,f.name));e.target.value='';});
+$('tireSample').addEventListener('click',()=>run(sample(),''));
+$('tireUnits').addEventListener('change',()=>{table();draw();});
+$('tireCopy').addEventListener('click',()=>{const u=$('tireUnits').value;const txt=['Fz_'+u+',B,C,D,E,Sh_deg,Sv_'+u+',R2',...groups.map(g=>[g.z.toFixed(1),...g.fit.p.map(v=>v.toFixed(5)),g.fit.r2.toFixed(4)].join(','))].join('\n');
+  const done=()=>{$('tireStatus').textContent='Coefficients copied as CSV.';};
+  if(navigator.clipboard)navigator.clipboard.writeText(txt).then(done,()=>{$('tireStatus').textContent=txt;});else $('tireStatus').textContent=txt;});
+addEventListener('resize',()=>groups.length&&draw());
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change',()=>groups.length&&draw());
+run(sample(),'');
+if(document.fonts)document.fonts.ready.then(()=>groups.length&&draw());
 })();
 </script>
 </body>
