@@ -1,13 +1,13 @@
 # Steering Sandbox sample: FSAE left-front corner. Units mm. Axes: +X forward, +Y left (outboard), +Z up. Ground at Z=0, car centerline at Y=0.
 name,x_mm,y_mm,z_mm
-LCA_F,120,230,110
-LCA_R,-120,230,105
-UCA_F,110,290,260
-UCA_R,-110,290,265
+LCA_F,120,230,103
+LCA_R,-120,230,112
+UCA_F,110,290,270
+UCA_R,-110,290,255
 LBJ,5,560,120
 UBJ,-10,540,300
 OTR,-70,515,150
-ITR,-55,205,132.5
+ITR,-55,205,130.6
 WC,0,590,228
 CP,0,600,0
 wheelbase,1550,,

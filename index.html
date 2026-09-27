@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Steering Sandbox</title>
-<meta name="description" content="Import FSAE steering hardpoints from Fusion 360 and see Ackermann, scrub radius, KPI, caster and bump steer, and fit Pacejka tire curves to your tire data.">
+<meta name="description" content="FSAE suspension toolkit: steering geometry from Fusion 360 hardpoints, tire curve fitting, roll center and anti-dive, steering ratio and U-joints, load transfer and steering effort.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..900&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
@@ -130,6 +130,48 @@ footer{font:400 12px var(--mono);color:var(--ink-2);display:flex;justify-content
 :root{--t1:#1E55D6;--t2:#11875B;--t3:#C2410C;--t4:#8B3FC7}
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--t1:#5B86F0;--t2:#2FA879;--t3:#D96A30;--t4:#A874E8}}
 :root[data-theme="dark"]{--t1:#5B86F0;--t2:#2FA879;--t3:#D96A30;--t4:#A874E8}
+
+/* suspension module */
+.subnav{display:flex;flex-wrap:wrap;gap:6px;position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--paper);padding:8px 0;border-bottom:1px solid var(--rule)}
+.subnav a{font:500 12px/1 var(--mono);text-decoration:none;color:var(--ink);border:1px solid var(--ink);padding:7px 10px;background:var(--sheet)}
+.subnav a:hover{background:var(--accent);border-color:var(--accent);color:#fff}
+.vgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:10px 14px;padding:12px 14px}
+.vgrid label{display:flex;flex-direction:column;gap:4px}
+.vgrid input{padding:6px 8px;border:1px solid var(--rule);background:var(--paper);font:400 13px var(--mono);width:100%}
+.chk{flex-direction:row!important;align-items:center;gap:8px!important;font-size:14px}
+.rc-grid{display:grid;grid-template-columns:1fr 1fr}
+.rc-grid > div{min-width:0}
+.rc-grid > div + div{border-left:1px solid var(--rule)}
+#rcFront,#rcSide{aspect-ratio:16/10}
+@media (max-width:860px){.rc-grid{grid-template-columns:1fr}.rc-grid > div + div{border-left:0;border-top:1px solid var(--rule)}}
+.kv{padding:12px 14px;display:flex;flex-direction:column;gap:0}
+.kv-row{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));column-gap:24px;border-top:1px solid var(--rule)}
+.kvr{display:flex;justify-content:space-between;gap:12px;padding:6px 0;border-bottom:1px solid var(--rule);font-size:13.5px}
+.kvr span{color:var(--ink-2)}
+.kvr b{font:500 13px var(--mono);text-align:right;font-variant-numeric:tabular-nums}
+.kvr b.ok{color:var(--ideal)} .kvr b.mid{color:#B7791F} .kvr b.hi{color:var(--warn)}
+.lt-grid{display:grid;grid-template-columns:1fr 1fr}
+.lt-grid > div{min-width:0}
+.lt-ctrl{padding:12px 14px;border-right:1px solid var(--rule);display:flex;flex-direction:column;gap:10px}
+.lt-ctrl label{display:grid;grid-template-columns:1fr auto;gap:4px 10px;align-items:center}
+.lt-ctrl label .label{grid-column:1/-1}
+.lt-ctrl output{font:500 13px var(--mono);min-width:6ch;text-align:right}
+.presets{display:flex;flex-wrap:wrap;gap:6px}
+.presets .btn{padding:7px 9px;font-size:12px}
+.lt-ctrl .kv{padding:0}
+#ltCar{aspect-ratio:1/1.15}
+@media (max-width:860px){.lt-grid{grid-template-columns:1fr}.lt-ctrl{border-right:0;border-bottom:1px solid var(--rule)}}
+.effort-grid{display:grid;grid-template-columns:1fr 1fr;border-top:1px solid var(--rule)}
+.et{padding:14px;display:flex;flex-direction:column;gap:8px;min-width:0}
+.et + .et{border-left:1px solid var(--rule)}
+.et .kv{padding:4px 0 0}
+.ev{font:800 40px/1 var(--display);font-variation-settings:"wdth" 100;font-variant-numeric:tabular-nums}
+.ev small{font:500 12px var(--mono);color:var(--ink-2);margin-left:6px}
+.pill{align-self:flex-start;font:500 12px/1 var(--mono);padding:5px 8px;border:1.5px solid currentColor}
+.pill.ok{color:var(--ideal)} .pill.mid{color:#B7791F} .pill.hi{color:var(--warn)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .pill.mid,:root:not([data-theme="light"]) .kvr b.mid{color:#F2B233}}
+:root[data-theme="dark"] .pill.mid,:root[data-theme="dark"] .kvr b.mid{color:#F2B233}
+@media (max-width:760px){.effort-grid{grid-template-columns:1fr}.et + .et{border-left:0;border-top:1px solid var(--rule)}}
 </style>
 </head>
 <body>
@@ -150,11 +192,15 @@ footer{font:400 12px var(--mono);color:var(--ink-2);display:flex;justify-content
     </div>
   </header>
 
+  <nav class="subnav" aria-label="Tools">
+    <a href="#top-view">Steering geometry</a><a href="#tires">Tire curves</a><a href="#vehicle">Vehicle</a><a href="#rollcenter">Roll center &amp; anti</a><a href="#ratio">Steering ratio &amp; U-joints</a><a href="#loads">Load transfer</a><a href="#effort">Steering effort</a><a href="#hardpoints">Hardpoints</a><a href="#fusion">Fusion import</a>
+  </nav>
+
   <div id="status" role="status">Loading sample car…</div>
 
   <div class="metrics" id="metrics"></div>
 
-  <div class="views">
+  <div class="views" id="top-view">
     <div class="panel">
       <div class="panel-h"><h2>Top view</h2><span class="hint">Drag the blue tie-rod ends. Dashed lines should meet on the rear axle.</span></div>
       <canvas id="top" aria-label="Top view of the front axle with steered wheels and Ackermann lines"></canvas>
@@ -214,7 +260,77 @@ footer{font:400 12px var(--mono);color:var(--ink-2);display:flex;justify-content
     </div>
   </div>
 
-  <div class="panel">
+  <div class="panel" id="vehicle">
+    <div class="panel-h"><h2>Vehicle parameters</h2><span class="hint">Pre-filled from the EV2 2025–26 vehicle dynamics sheet. Change any value and every tool below updates.</span></div>
+    <div class="vgrid" id="vgrid"></div>
+    <div class="params" style="border-top:1px solid var(--rule)">
+      <label class="chk"><input type="checkbox" id="useHpRC" checked> Use the front roll center calculated from the hardpoints</label>
+      <button class="btn" id="resetEV2" type="button">Reset to EV2 values</button>
+      <span class="hint">Source: <a href="https://docs.google.com/spreadsheets/d/1xbYSih7mtJYHMdyTQ5hdRJBR325y-rxVZeezf-8Pny8/edit" target="_blank" rel="noopener">EV2 Vehicle Dynamics Calcs</a> (Motorsports shared drive). Total roll stiffness is from the 2020 team steering code, so replace it with yours.</span>
+    </div>
+  </div>
+
+  <div class="panel" id="rollcenter">
+    <div class="panel-h"><h2>Roll center &amp; anti-geometry</h2><span class="hint">Front view and side view instant centers from the hardpoints, including roll center migration through wheel travel.</span></div>
+    <div class="rc-grid">
+      <div><canvas id="rcFront" aria-label="Front view instant center and roll center construction"></canvas></div>
+      <div><canvas id="rcSide" aria-label="Side view instant center and anti-dive line"></canvas></div>
+    </div>
+    <div class="rc-grid" style="border-top:1px solid var(--rule)">
+      <div><canvas id="rcMig" class="chart" aria-label="Roll center height versus wheel travel"></canvas></div>
+      <div class="kv" id="rcOut"></div>
+    </div>
+  </div>
+
+  <div class="panel" id="ratio">
+    <div class="panel-h"><h2>Steering ratio &amp; U-joints</h2><span class="hint">Steering wheel → U-joints → pinion → rack → road wheels, solved through the same linkage as the top view.</span></div>
+    <div class="params">
+      <label><span class="label">Rack C-factor (mm/rev)</span><input id="cfac" type="number" step="1" value="90"></label>
+      <label><span class="label">U-joint 1 angle (°)</span><input id="uj1" type="number" step="0.5" value="18"></label>
+      <label><span class="label">U-joint 2 angle (°)</span><input id="uj2" type="number" step="0.5" value="18"></label>
+      <label><span class="label">Joint plane angle (°)</span><input id="ujPlane" type="number" step="5" value="0"></label>
+      <label><span class="label">Yoke phasing (°)</span><input id="ujPhase" type="number" step="5" value="0"></label>
+      <label><span class="label">Steering wheel Ø (mm)</span><input id="swDia" type="number" step="5" value="260"></label>
+    </div>
+    <div class="rc-grid">
+      <div><canvas id="ujChart" class="chart" aria-label="Output to input speed ratio of the U-joint pair over one turn"></canvas></div>
+      <div><canvas id="srChart" class="chart" aria-label="Overall steering ratio versus steering wheel angle"></canvas></div>
+    </div>
+    <div class="kv kv-row" id="ratioOut"></div>
+  </div>
+
+  <div class="panel" id="loads">
+    <div class="panel-h"><h2>Load transfer</h2><span class="hint">Steady-state corner loads split into unsprung, roll center (geometric) and elastic (roll stiffness) paths.</span></div>
+    <div class="lt-grid">
+      <div class="lt-ctrl">
+        <label><span class="label">Lateral accel (g, + = left turn)</span><input id="ay" type="range" min="-2" max="2" step="0.05" value="1.5"><output id="ayOut"></output></label>
+        <label><span class="label">Longitudinal accel (g, − = braking)</span><input id="ax" type="range" min="-2" max="1.5" step="0.05" value="0"><output id="axOut"></output></label>
+        <div class="presets">
+          <button class="btn" type="button" data-p="1.5,0">Skidpad 1.5 g</button>
+          <button class="btn" type="button" data-p="0,-1.4">Threshold braking</button>
+          <button class="btn" type="button" data-p="0,acc">Full motor torque</button>
+          <button class="btn" type="button" data-p="1.2,-0.8">Trail braking</button>
+        </div>
+        <div class="kv" id="ltOut"></div>
+      </div>
+      <div><canvas id="ltCar" aria-label="Top-down car with the load on each tire"></canvas></div>
+    </div>
+  </div>
+
+  <div class="panel" id="effort">
+    <div class="panel-h"><h2>Steering effort</h2><span class="hint">Static (parking) and cornering effort at the rim, against the team targets of 5 N·m ideal and 10 N·m maximum.</span></div>
+    <div class="params">
+      <label><span class="label">Tire tread width (mm)</span><input id="tread" type="number" step="5" value="190"></label>
+      <label><span class="label">Static μ (dry, parked)</span><input id="muS" type="number" step="0.05" value="0.9"></label>
+      <label><span class="label">Pneumatic trail (mm)</span><input id="ptrail" type="number" step="1" value="20"></label>
+      <label><span class="label">Skidpad path radius (m)</span><input id="skidR" type="number" step="0.1" value="9.1"></label>
+      <label><span class="label">System friction (N·m at wheel)</span><input id="fric" type="number" step="0.1" value="0.5"></label>
+    </div>
+    <div class="effort-grid" id="effortOut"></div>
+    <p class="hint" style="padding:0 14px 14px;margin:0">Static torque per wheel uses T = F<sub>z</sub>·μ·√(B²/8 + e²), from the Static Steering Effort paper on the team drive, with scrub e from the hardpoints. Cornering torque uses (mechanical + pneumatic trail)·F<sub>y</sub> on each front tire, with loads from the load transfer tool. Both are carried to the rim through the linkage and steering ratio above. Get pneumatic trail from TTC data as M<sub>z</sub>/F<sub>y</sub> in the linear region.</p>
+  </div>
+
+  <div class="panel" id="hardpoints">
     <div class="panel-h"><h2>Hardpoints</h2><span class="hint">mm · +X forward · +Y outboard (left) · +Z up · ground at Z = 0</span></div>
     <div class="tbl-wrap"><table>
       <thead><tr><th>Point</th><th>Baseline X</th><th>Y</th><th>Z</th><th>Current X</th><th>Y</th><th>Z</th></tr></thead>
@@ -251,7 +367,7 @@ footer{font:400 12px var(--mono);color:var(--ink-2);display:flex;justify-content
 LBJ,5,560,120
 UBJ,-10,540,300
 OTR,-70,515,150
-ITR,-55,205,132.5
+ITR,-55,205,130.6
 WC,0,590,228
 CP,0,600,0
 wheelbase,1550,,</pre>
@@ -303,14 +419,14 @@ const KEYS=[
   ['UCA_F','Upper arm, front inner',false],['UCA_R','Upper arm, rear inner',false]];
 const SAMPLE=`# Steering Sandbox sample (mm, +X fwd, +Y left, +Z up)
 name,x_mm,y_mm,z_mm
-LCA_F,120,230,110
-LCA_R,-120,230,105
-UCA_F,110,290,260
-UCA_R,-110,290,265
+LCA_F,120,230,103
+LCA_R,-120,230,112
+UCA_F,110,290,270
+UCA_R,-110,290,255
 LBJ,5,560,120
 UBJ,-10,540,300
 OTR,-70,515,150
-ITR,-55,205,132.5
+ITR,-55,205,130.6
 WC,0,590,228
 CP,0,600,0
 wheelbase,1550,,`;
@@ -442,7 +558,7 @@ function bumpAt(P,phi,base){
   const map=p=>add(mv(R1,sub(p,P.LBJ)),lbj), otr1=map(P.OTR), k2=unit(sub(ubj,lbj)), L=len(sub(P.OTR,P.ITR));
   const chi=solve(c=>len(sub(rotAbout(otr1,lbj,k2,c),P.ITR))-L,-0.8,0.8); if(!isFinite(chi))return null;
   const R=mm(axisMat(k2,chi),R1), wc=add(mv(R,sub(P.WC,P.LBJ)),lbj), h=mv(R,HEAD), s=mv(R,SPIN);
-  return {dz:wc.z-P.WC.z,toe:-deg(Math.atan2(h.y,h.x)),camber:-deg(Math.asin(Math.max(-1,Math.min(1,s.z))))};
+  return {dz:wc.z-P.WC.z,toe:-deg(Math.atan2(h.y,h.x)),camber:-deg(Math.asin(Math.max(-1,Math.min(1,s.z)))),lbj,ubj,wc};
 }
 function bump(P){
   if(!['LCA_F','LCA_R','UCA_F','UCA_R'].every(k=>P[k]))return null;
@@ -454,6 +570,7 @@ function bump(P){
   return {pts,rate:(up.toe-dn.toe)/((up.dz-dn.dz)/25),camber:(up.camber-dn.camber)/((up.dz-dn.dz)/25)};
 }
 function analyze(P,wb,travel){const geo=geometry(P);return {geo,ack:ackermann(P,wb,travel),bump:bump(P)};}
+window.SS={get cur(){return cur;},get base(){return base;},geometry,steerAt,bumpAt,V,add,sub,mul,dot,cross,len,unit,deg,rad,axisMat,mv,rotAbout,solve,get dir(){return A&&A.ack?A.ack.dir:-1;},listeners:[]};
 
 /* ---------- state ---------- */
 let base=null, cur=null, lastText=null, lastName='sample_hardpoints.csv';
@@ -652,6 +769,7 @@ function update(syncInputs=true){
   const u=+$('steer').value/100*travel;
   $('steerOut').textContent=(u>=0?'+':'')+u.toFixed(1)+' mm';
   renderMetrics(A,Bs); drawTop(); drawFront(); drawCharts(); if(syncInputs)syncTable(); else syncTable();
+  window.SS.listeners.forEach(f=>{try{f();}catch(e){console.error(e);}});
 }
 
 /* ---------- dragging ---------- */
@@ -793,6 +911,254 @@ matchMedia('(prefers-color-scheme: dark)').addEventListener('change',()=>groups.
 run(sample(),'');
 if(document.fonts)document.fonts.ready.then(()=>groups.length&&draw());
 })();
+</script>
+<script>
+(function(){
+'use strict';
+const S=window.SS; if(!S)return;
+const {V,add,sub,mul,dot,cross,len,unit,deg,rad,axisMat,mv,rotAbout}=S;
+const $=id=>document.getElementById(id);
+const css=n=>getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const G=9.81;
+
+/* ---------- vehicle parameters (EV2 2025-26 sheet) ---------- */
+const EV2=[
+  ['m','Total mass (car + driver)',328,'kg'],['wdf','Front weight fraction',0.45,''],
+  ['L','Wheelbase',1554.2,'mm'],['tf','Front track',1330,'mm'],['tr','Rear track',1330,'mm'],
+  ['h','CG height',343,'mm'],['zrf','Front roll center height',70.7,'mm'],['zrr','Rear roll center height',81.3,'mm'],
+  ['muf','Front unsprung mass (axle)',18.14,'kg'],['mur','Rear unsprung mass (axle)',22.675,'kg'],
+  ['kfrac','Front roll stiffness share',0.45,''],['ktot','Total roll stiffness',1138,'N·m/°'],
+  ['rw','Loaded tire radius',229,'mm'],['tm','Combined motor torque',650,'N·m'],
+  ['tb','Combined brake torque',1700,'N·m'],['tbf','Front brake torque',1020,'N·m'],['adT','Anti-dive target',85,'%']];
+function buildParams(){
+  $('vgrid').innerHTML=EV2.map(([k,l,v,u])=>`<label><span class="label">${l}${u?' ('+u+')':''}</span><input id="vp-${k}" type="number" step="any" value="${v}"></label>`).join('');
+  EV2.forEach(([k])=>$('vp-'+k).addEventListener('input',renderAll));
+}
+const P_=k=>{const v=parseFloat($('vp-'+k).value);return isFinite(v)?v:EV2.find(e=>e[0]===k)[2];};
+function veh(){return {m:P_('m'),wdf:P_('wdf'),L:P_('L')/1000,tf:P_('tf')/1000,tr:P_('tr')/1000,h:P_('h')/1000,zrf:P_('zrf')/1000,zrr:P_('zrr')/1000,
+  muf:P_('muf'),mur:P_('mur'),kfrac:P_('kfrac'),ktot:P_('ktot'),rw:P_('rw')/1000,tm:P_('tm'),tb:P_('tb'),tbf:P_('tbf'),adT:P_('adT')};}
+
+/* ---------- 2D helpers ---------- */
+function isect(p1,p2,p3,p4){const d=(p1[0]-p2[0])*(p3[1]-p4[1])-(p1[1]-p2[1])*(p3[0]-p4[0]);if(Math.abs(d)<1e-9)return null;
+  const a=p1[0]*p2[1]-p1[1]*p2[0],b=p3[0]*p4[1]-p3[1]*p4[0];return [(a*(p3[0]-p4[0])-(p1[0]-p2[0])*b)/d,(a*(p3[1]-p4[1])-(p1[1]-p2[1])*b)/d];}
+const avg=(a,b)=>mul(add(a,b),.5);
+function hasArms(P){return ['LCA_F','LCA_R','UCA_F','UCA_R'].every(k=>P[k]);}
+
+/* front view: IC and roll centre for given ball joints / contact patch (all body frame, mm) */
+function frontRC(P,lbj,ubj,cp){
+  const li=avg(P.LCA_F,P.LCA_R),ui=avg(P.UCA_F,P.UCA_R);
+  const L1=[[li.y,li.z],[lbj.y,lbj.z]],U1=[[ui.y,ui.z],[ubj.y,ubj.z]];
+  const ic=isect(L1[0],L1[1],U1[0],U1[1]);
+  let rcz;
+  if(ic&&Math.abs(ic[0]-cp[0])>1e-6){rcz=cp[1]+(ic[1]-cp[1])*(0-cp[0])/(ic[0]-cp[0]);}
+  else{const s=(lbj.z-li.z)/(lbj.y-li.y);rcz=cp[1]+s*(0-cp[0]);}
+  return {ic,rcz:rcz-cp[1],fvsa:ic?Math.hypot(ic[0]-cp[0],ic[1]-cp[1]):Infinity};
+}
+function sideIC(P){
+  const ic=isect([P.LCA_F.x,P.LCA_F.z],[P.LCA_R.x,P.LCA_R.z],[P.UCA_F.x,P.UCA_F.z],[P.UCA_R.x,P.UCA_R.z]);
+  let tan;
+  if(ic&&Math.abs(P.CP.x-ic[0])>1e-6)tan=(ic[1]-P.CP.z)/(P.CP.x-ic[0]);
+  else tan=-(P.LCA_R.z-P.LCA_F.z)/(P.LCA_R.x-P.LCA_F.x);
+  return {ic,tan,svsa:ic?Math.hypot(ic[0]-P.CP.x,ic[1]-P.CP.z):Infinity};
+}
+function rcAnalysis(P){
+  if(!hasArms(P))return null;
+  const f=frontRC(P,P.LBJ,P.UBJ,[P.CP.y,P.CP.z]);
+  const mig=[];const arm=len(sub(P.LBJ,P.LCA_F))||300,span=Math.min(0.35,60/arm);
+  for(let i=0;i<=40;i++){const b=S.bumpAt(P,-span+2*span*i/40);if(!b||Math.abs(b.dz)>32)continue;
+    const cp=[P.CP.y+(b.wc.y-P.WC.y),P.CP.z+b.dz];const r=frontRC(P,b.lbj,b.ubj,cp);mig.push({dz:b.dz,rc:r.rcz,camber:b.camber});}
+  mig.sort((a,b)=>a.dz-b.dz);
+  return {f,s:sideIC(P),mig};
+}
+
+/* ---------- U-joint chain ---------- */
+function ujModel(b1,b2,plane,phase){
+  const a0=V(0,0,1),a1=mv(axisMat(V(1,0,0),rad(b1)),a0);
+  const n2=mv(axisMat(a1,rad(plane)),V(1,0,0)),a2=mv(axisMat(n2,rad(b2)),a1);
+  function pin(th){const y0=V(Math.cos(th),Math.sin(th),0);const c1=unit(cross(y0,a1));const y1=mv(axisMat(a1,rad(phase)),c1);return unit(cross(y1,a2));}
+  const r0=pin(0),rp=cross(a2,r0);
+  return function(thDeg){ // unwrapped output angle in degrees
+    const n=Math.max(1,Math.ceil(Math.abs(thDeg)/5));let out=0,prev=0;
+    for(let i=1;i<=n;i++){const t=rad(thDeg*i/n),c=pin(t);let a=Math.atan2(dot(c,rp),dot(c,r0));let d=a-prev;while(d>Math.PI)d-=2*Math.PI;while(d<-Math.PI)d+=2*Math.PI;out+=d;prev=a;}
+    return deg(out);};
+}
+function ratioModel(){
+  const P=S.cur, uj=ujModel(+$('uj1').value||0,+$('uj2').value||0,+$('ujPlane').value||0,+$('ujPhase').value||0);
+  const C=Math.max(1,+$('cfac').value||90), travel=Math.max(1,+$('travel').value||30), dir=S.dir;
+  const wheels=sw=>{const u=uj(sw)/360*C;const L=S.steerAt(P,dir*u),R=S.steerAt(P,-dir*u);if(!L||!R)return null;return {u,dl:L.delta,dr:-R.delta};};
+  // SW angle at full rack travel
+  let lo=0,hi=720;for(let i=0;i<40;i++){const m=(lo+hi)/2;(uj(m)/360*C<travel)?lo=m:hi=m;}
+  return {uj,C,wheels,lock:(lo+hi)/2};
+}
+
+/* ---------- load transfer ---------- */
+function rcFront(){if($('useHpRC').checked){const r=rcAnalysis(S.cur);if(r)return r.f.rcz/1000;}return veh().zrf;}
+function loads(ay,ax){
+  const v=veh(),m=v.m,mF=m*v.wdf,mR=m-mF,msF=mF-v.muf,msR=mR-v.mur,ms=msF+msR,zrf=rcFront(),zrr=v.zrr;
+  const H=v.h-((1-v.wdf)*(zrr-zrf)+zrf);
+  const el=ms*H, dF=ay*G*(el*v.kfrac/v.tf+msF*zrf/v.tf+v.muf*v.rw/v.tf), dR=ay*G*(el*(1-v.kfrac)/v.tr+msR*zrr/v.tr+v.mur*v.rw/v.tr);
+  const dX=m*(-ax)*G*v.h/v.L/2, sF=mF*G/2, sR=mR*G/2;
+  const parts={F:{geo:ay*G*msF*zrf/v.tf,el:ay*G*el*v.kfrac/v.tf,uns:ay*G*v.muf*v.rw/v.tf},R:{geo:ay*G*msR*zrr/v.tr,el:ay*G*el*(1-v.kfrac)/v.tr,uns:ay*G*v.mur*v.rw/v.tr}};
+  return {FL:sF-dF+dX,FR:sF+dF+dX,RL:sR-dR-dX,RR:sR+dR-dX,dF,dR,dX,H,zrf,roll:ms*G*ay*H/v.ktot,gradient:ms*G*H/v.ktot,lltdF:(dF*v.tf)/((dF*v.tf+dR*v.tr)||1),parts,v,sF,sR};
+}
+
+/* ---------- drawing helpers ---------- */
+function prep(cv){const d=Math.min(2,devicePixelRatio||1),w=cv.clientWidth,h=cv.clientHeight;cv.width=Math.round(w*d);cv.height=Math.round(h*d);const c=cv.getContext('2d');c.setTransform(d,0,0,d,0,0);c.clearRect(0,0,w,h);return [c,w,h];}
+function ln(c,a,b,col,w=1.5,dash){c.save();c.strokeStyle=col;c.lineWidth=w;if(dash)c.setLineDash(dash);c.beginPath();c.moveTo(a[0],a[1]);c.lineTo(b[0],b[1]);c.stroke();c.restore();}
+function dt(c,p,r,f,s){c.beginPath();c.arc(p[0],p[1],r,0,7);c.fillStyle=f;c.fill();if(s){c.strokeStyle=s;c.lineWidth=1.5;c.stroke();}}
+function tx(c,s,x,y,col,al='left',sz=11){c.fillStyle=col;c.font=`500 ${sz}px "IBM Plex Mono",monospace`;c.textAlign=al;c.fillText(s,x,y);}
+function chart(cv,o){
+  const [c,w,h]=prep(cv),ink2=css('--ink-2'),rule=css('--rule'),ink=css('--ink');
+  const m={l:48,r:14,t:14,b:36},W=w-m.l-m.r,H=h-m.t-m.b,X=v=>m.l+(v-o.x0)/(o.x1-o.x0)*W,Y=v=>m.t+H-(v-o.y0)/(o.y1-o.y0)*H;
+  c.font='400 10.5px "IBM Plex Mono",monospace';
+  for(let v=o.x0;v<=o.x1+1e-9;v+=o.xs){c.strokeStyle=rule;c.globalAlpha=.6;c.beginPath();c.moveTo(X(v),m.t);c.lineTo(X(v),m.t+H);c.stroke();c.globalAlpha=1;c.fillStyle=ink2;c.textAlign='center';c.fillText(+v.toFixed(2),X(v),m.t+H+14);}
+  for(let v=o.y0;v<=o.y1+1e-9;v+=o.ys){c.strokeStyle=rule;c.globalAlpha=.6;c.beginPath();c.moveTo(m.l,Y(v));c.lineTo(m.l+W,Y(v));c.stroke();c.globalAlpha=1;c.fillStyle=ink2;c.textAlign='right';c.fillText(+v.toFixed(3),m.l-6,Y(v)+3.5);}
+  c.strokeStyle=ink;c.lineWidth=1;c.strokeRect(m.l,m.t,W,H);c.fillStyle=ink2;c.textAlign='center';c.fillText(o.xl,m.l+W/2,h-6);
+  c.save();c.translate(12,m.t+H/2);c.rotate(-Math.PI/2);c.fillText(o.yl,0,0);c.restore();
+  c.save();c.beginPath();c.rect(m.l,m.t,W,H);c.clip();
+  o.series.forEach(s=>{if(!s.pts||s.pts.length<2)return;c.strokeStyle=s.col;c.lineWidth=s.w||2;c.setLineDash(s.dash||[]);c.beginPath();s.pts.forEach((p,i)=>i?c.lineTo(X(p[0]),Y(p[1])):c.moveTo(X(p[0]),Y(p[1])));c.stroke();});
+  c.restore();if(o.note){tx(c,o.note,m.l+8,m.t+16,ink2);}
+}
+const niceStep=r=>{const s=[0.01,0.02,0.05,0.1,0.2,0.25,0.5,1,2,5,10,20,25,50,100,200,250,500,1000];return s.find(v=>r/v<=6)||2000;};
+function range(vals,pad){let a=Math.min(...vals),b=Math.max(...vals);if(b-a<1e-6){a-=1;b+=1;}const p=(b-a)*pad;a-=p;b+=p;const st=niceStep(b-a);return [Math.floor(a/st)*st,Math.ceil(b/st)*st,st];}
+const kv=(rows)=>rows.map(([k,v,cls])=>`<div class="kvr"><span>${k}</span><b class="${cls||''}">${v}</b></div>`).join('');
+const f1=v=>isFinite(v)?v.toFixed(1):'–', f0=v=>isFinite(v)?v.toFixed(0):'–';
+
+/* ---------- renderers ---------- */
+function renderRC(){
+  const P=S.cur,r=rcAnalysis(P),acc=css('--accent'),ink=css('--ink'),ink2=css('--ink-2'),rule=css('--rule'),ideal=css('--ideal'),warn=css('--warn'),tire=css('--tire');
+  if(!r){$('rcOut').innerHTML='<p class="hint">Add LCA_F, LCA_R, UCA_F and UCA_R hardpoints to compute roll center and anti-geometry.</p>';['rcFront','rcSide','rcMig'].forEach(id=>prep($(id)));return;}
+  const v=veh();
+  // front view
+  {const [c,w,h]=prep($('rcFront'));const ic=r.f.ic;const yMin=Math.max(-2200,Math.min(-150,ic?ic[0]:-150)),yMax=Math.max(P.CP.y,P.WC.y)+140;
+    const zMax=Math.max(P.UBJ.z,ic?Math.min(ic[1],900):0,P.WC.z*2)+40,zMin=-30;const s=Math.min((w-30)/(yMax-yMin),(h-40)/(zMax-zMin));
+    const S2=(y,z)=>[15+(y-yMin)*s,h-20-(z-zMin)*s];
+    ln(c,S2(yMin,0),S2(yMax,0),ink2,1.2);ln(c,S2(0,zMin),S2(0,zMax),rule,1,[2,4]);tx(c,'CL',S2(0,0)[0]+4,14,ink2);
+    const t0=S2(P.WC.y-100,2*P.WC.z),t1=S2(P.WC.y+100,0);c.fillStyle=tire;c.globalAlpha=.8;c.fillRect(t0[0],t0[1],t1[0]-t0[0],t1[1]-t0[1]);c.globalAlpha=1;
+    const li=avg(P.LCA_F,P.LCA_R),ui=avg(P.UCA_F,P.UCA_R);
+    ln(c,S2(li.y,li.z),S2(P.LBJ.y,P.LBJ.z),ink,3);ln(c,S2(ui.y,ui.z),S2(P.UBJ.y,P.UBJ.z),ink,3);
+    if(ic){ln(c,S2(P.LBJ.y,P.LBJ.z),S2(ic[0],ic[1]),acc,1,[5,4]);ln(c,S2(P.UBJ.y,P.UBJ.z),S2(ic[0],ic[1]),acc,1,[5,4]);ln(c,S2(P.CP.y,0),S2(ic[0],ic[1]),ideal,1.4,[7,4]);
+      if(ic[0]>=yMin)dt(c,S2(ic[0],ic[1]),4,acc);else tx(c,`IC at y = ${f0(ic[0])} mm →`,20,S2(0,ic[1])[1]-6,acc);}
+    dt(c,S2(0,r.f.rcz),5,ideal,css('--sheet'));tx(c,`RC ${f1(r.f.rcz)} mm`,S2(0,r.f.rcz)[0]+8,S2(0,r.f.rcz)[1]-6,ink);
+    tx(c,'FRONT VIEW · left corner',w-10,14,ink2,'right');}
+  // side view
+  {const [c,w,h]=prep($('rcSide'));const ic=r.s.ic;const xMin=Math.max(-3200,Math.min(-400,ic?ic[0]:-400)),xMax=450;
+    const zMax=Math.max(P.UCA_F.z,P.UCA_R.z,P.WC.z*2,ic?Math.min(ic[1],900):0)+40,zMin=-30;const s=Math.min((w-30)/(xMax-xMin),(h-40)/(zMax-zMin));
+    const S2=(x,z)=>[w-15-(xMax-x)*s,h-20-(z-zMin)*s];
+    ln(c,S2(xMin,0),S2(xMax,0),ink2,1.2);
+    c.strokeStyle=tire;c.lineWidth=2;c.beginPath();const wc=S2(P.WC.x,P.WC.z);c.arc(wc[0],wc[1],P.WC.z*s,0,7);c.stroke();
+    ln(c,S2(P.LCA_F.x,P.LCA_F.z),S2(P.LCA_R.x,P.LCA_R.z),ink,3);ln(c,S2(P.UCA_F.x,P.UCA_F.z),S2(P.UCA_R.x,P.UCA_R.z),ink,3);
+    if(ic){ln(c,S2(P.LCA_R.x,P.LCA_R.z),S2(ic[0],ic[1]),acc,1,[5,4]);ln(c,S2(P.UCA_R.x,P.UCA_R.z),S2(ic[0],ic[1]),acc,1,[5,4]);ln(c,S2(P.CP.x,0),S2(ic[0],ic[1]),ideal,1.4,[7,4]);
+      if(ic[0]>=xMin)dt(c,S2(ic[0],ic[1]),4,acc);else tx(c,`← SVIC at x = ${f0(ic[0])} mm`,20,S2(xMin,ic[1])[1]-6,acc);}
+    tx(c,'SIDE VIEW · front →',w-10,14,ink2,'right');}
+  // migration chart
+  const b=S.base&&hasArms(S.base)?rcAnalysis(S.base):null;
+  const ys=r.mig.map(p=>p.rc).concat(b?b.mig.map(p=>p.rc):[]);const [y0,y1,ys_]=range(ys,0.15);
+  chart($('rcMig'),{x0:-30,x1:30,xs:10,y0,y1,ys:ys_,xl:'wheel travel (mm, + = bump)',yl:'roll center height (mm)',
+    series:[b?{pts:b.mig.map(p=>[p.dz,p.rc]),col:css('--base'),w:1.5,dash:[5,3]}:{},{pts:r.mig.map(p=>[p.dz,p.rc]),col:acc,w:2.5}],note:'front roll center migration in heave'});
+  const bf=v.tbf/v.tb, ad=r.s.tan*(v.L/v.h)*bf*100;
+  const mig25=(()=>{const a=r.mig.find(p=>p.dz>=24),z=r.mig.reduce((q,p)=>Math.abs(p.dz)<Math.abs(q.dz)?p:q,r.mig[0]);return a?(a.rc-z.rc):NaN;})();
+  $('rcOut').innerHTML=kv([
+    ['Front roll center height',f1(r.f.rcz)+' mm'],['EV2 sheet value',f1(v.zrf*1000)+' mm'],
+    ['Front view swing arm',isFinite(r.f.fvsa)?f0(r.f.fvsa)+' mm':'∞ (parallel arms)'],
+    ['RC change in 25 mm bump',isFinite(mig25)?(mig25>0?'+':'')+f1(mig25)+' mm':'–'],
+    ['Side view IC',r.s.ic?`x ${f0(r.s.ic[0])}, z ${f0(r.s.ic[1])} mm`:'∞ (parallel pivots)'],
+    ['Anti-dive (outboard brakes)',f0(ad)+' %',Math.abs(ad-v.adT)<15?'ok':'hi'],
+    ['Target from EV2 sheet',f0(v.adT)+' %'],
+    ['Front brake share',f0(bf*100)+' %']]);
+}
+function renderRatio(){
+  const M=ratioModel(),acc=css('--accent'),ideal=css('--ideal'),rule=css('--rule');
+  const b1=+$('uj1').value||0,b2=+$('uj2').value||0;
+  // U-joint speed ratio
+  const pts=[];let mx=-1e9,mn=1e9,err=0;for(let t=0;t<=360;t+=2){const r=(M.uj(t+0.5)-M.uj(t-0.5));pts.push([t,r]);mx=Math.max(mx,r);mn=Math.min(mn,r);err=Math.max(err,Math.abs(M.uj(t)-t));}
+  const lim=Math.max(0.02,Math.ceil(Math.max(mx-1,1-mn)*100)/100+0.01);
+  chart($('ujChart'),{x0:0,x1:360,xs:90,y0:1-lim,y1:1+lim,ys:niceStep(2*lim),xl:'steering wheel angle over one turn (°)',yl:'pinion speed / wheel speed',
+    series:[{pts:[[0,1],[360,1]],col:rule,w:1,dash:[2,4]},{pts,col:acc,w:2.5}],note:`fluctuation ±${((mx-mn)/2*100).toFixed(2)} %`});
+  // overall ratio vs SW angle
+  const sr=[];const step=Math.max(4,M.lock/40);
+  for(let sw=step;sw<=M.lock;sw+=step){const a=M.wheels(sw-step/2),c=M.wheels(sw+step/2);if(!a||!c)break;const d=((c.dl+c.dr)-(a.dl+a.dr))/2;if(d>1e-6)sr.push([sw,step/d]);}
+  const [y0,y1,ys]=range(sr.map(p=>p[1]),0.2);
+  chart($('srChart'),{x0:0,x1:Math.ceil(M.lock/30)*30,xs:Math.ceil(M.lock/30)*30>180?60:30,y0:Math.max(0,y0),y1,ys,xl:'steering wheel angle (°)',yl:'local steering ratio (:1)',series:[{pts:sr,col:acc,w:2.5}],note:'dθ wheel / dδ road-wheel average'});
+  const lockW=M.wheels(M.lock),avgLock=lockW?(lockW.dl+lockW.dr)/2:NaN;
+  const warnUJ=Math.max(b1,b2)>30?'hi':Math.max(b1,b2)>22?'mid':'ok';
+  const cancel=Math.abs(b1-b2)<0.5&&(+$('ujPlane').value||0)%180===0&&(+$('ujPhase').value||0)%180===0;
+  $('ratioOut').innerHTML=kv([
+    ['Ratio at center',sr.length?f1(sr[0][1])+' : 1':'–'],['Average ratio to lock',isFinite(avgLock)?f1(M.lock/avgLock)+' : 1':'–'],
+    ['Wheel angle to full rack travel',f0(M.lock)+'°'],['Lock to lock',(2*M.lock/360).toFixed(2)+' turns'],
+    ['Road wheels at lock',lockW?`${f1(lockW.dl)}° in / ${f1(lockW.dr)}° out`:'–'],
+    ['U-joint velocity fluctuation','±'+((mx-mn)/2*100).toFixed(2)+' %',cancel?'ok':(mx-mn)>0.02?'hi':'mid'],
+    ['Max phase error',err.toFixed(2)+'°'],['Largest joint angle',Math.max(b1,b2).toFixed(1)+'°',warnUJ]])+
+    `<p class="hint" style="grid-column:1/-1;margin:4px 0 0">${cancel?'Equal joint angles with in-phase yokes in one plane cancel the fluctuation.':'Unequal angles, a plane offset or yoke phasing leave a non-uniform ratio. Keep joint angles equal and yokes in phase unless the plane offset is corrected with phasing.'} Keep well under the joint's rated maximum angle, as the team doc says.</p>`;
+  return M;
+}
+function renderLoads(){
+  const ay=+$('ay').value,ax=+$('ax').value;$('ayOut').textContent=ay.toFixed(2)+' g';$('axOut').textContent=ax.toFixed(2)+' g';
+  const L=loads(ay,ax),v=L.v,ink=css('--ink'),ink2=css('--ink-2'),acc=css('--accent'),warn=css('--warn'),rule=css('--rule'),sheet=css('--sheet'),tire=css('--tire');
+  const [c,w,h]=prep($('ltCar'));const s=Math.min(w/(v.tf*1000+700),h/(v.L*1000+900));const cx=w/2,cy=h/2;
+  const pos={FL:[v.tf/2,v.L/2],FR:[-v.tf/2,v.L/2],RL:[v.tr/2,-v.L/2],RR:[-v.tr/2,-v.L/2]};
+  c.strokeStyle=rule;c.lineWidth=1;c.beginPath();c.moveTo(cx,cy-v.L*500*s-120*s);c.lineTo(cx,cy+v.L*500*s+120*s);c.stroke();
+  const maxN=Math.max(2200,...['FL','FR','RL','RR'].map(k=>L[k]));
+  Object.entries(pos).forEach(([k,[y,x]])=>{const p=[cx-y*1000*s,cy-x*1000*s],tw=200*s,th=460*s,N=L[k];
+    c.fillStyle=tire;c.globalAlpha=.25;c.fillRect(p[0]-tw/2,p[1]-th/2,tw,th);c.globalAlpha=1;
+    const fr=Math.max(0,Math.min(1,N/maxN));c.fillStyle=N<0?warn:acc;c.fillRect(p[0]-tw/2,p[1]+th/2-th*fr,tw,th*fr);
+    c.strokeStyle=ink;c.lineWidth=1;c.strokeRect(p[0]-tw/2,p[1]-th/2,tw,th);
+    const st=k[0]==='F'?L.sF:L.sR,yst=p[1]+th/2-th*Math.min(1,st/maxN);ln(c,[p[0]-tw/2-4,yst],[p[0]+tw/2+4,yst],ink2,1,[3,2]);
+    const lx=y>0?p[0]-tw/2-10:p[0]+tw/2+10,al=y>0?'right':'left';
+    tx(c,k,lx,p[1]-8,ink2,al);tx(c,f0(N)+' N',lx,p[1]+8,N<0?warn:ink,al,13);tx(c,(N>=st?'+':'')+f0(N-st),lx,p[1]+24,ink2,al);});
+  // accel arrow
+  const A=[cx,cy],Bv=[cx-ay*60,cy-ax*60];if(Math.hypot(ay,ax)>0.02){ln(c,A,Bv,ink,2.5);dt(c,Bv,4,ink);}
+  tx(c,'FRONT ↑',10,16,ink2);tx(c,'dashed = static load',w-10,16,ink2,'right');
+  const lift=['FL','FR','RL','RR'].filter(k=>L[k]<0);
+  const idealBias=(v.m*v.wdf*G+v.m*Math.max(0,-ax)*G*v.h/v.L)/(v.m*G)*100, bias=v.tbf/v.tb*100;
+  const axMotor=(v.tm/v.rw)/(v.m*G),axBrake=(v.tb/v.rw)/(v.m*G);
+  $('ltOut').innerHTML=kv([
+    ['Front lateral transfer (per wheel)',f0(L.dF)+' N'],['Rear lateral transfer (per wheel)',f0(L.dR)+' N'],
+    ['Longitudinal transfer (per wheel)',f0(L.dX)+' N'],['Front share of lateral transfer (LLTD)',f0(L.lltdF*100)+' %'],
+    ['Front: geometric / elastic / unsprung',`${f0(L.parts.F.geo)} / ${f0(L.parts.F.el)} / ${f0(L.parts.F.uns)} N`],
+    ['Roll angle',f1(L.roll)+'° ('+L.gradient.toFixed(2)+' °/g)'],['Roll axis to CG (H)',f0(L.H*1000)+' mm'],
+    ['Front RC used',f1(L.zrf*1000)+' mm'+($('useHpRC').checked?' (hardpoints)':' (sheet)')],
+    ['Brake bias vs ideal here',`${f0(bias)} % vs ${f0(idealBias)} %`,ax<-0.05?(Math.abs(bias-idealBias)<4?'ok':bias>idealBias?'mid':'hi'):''],
+    ['Torque-limited accel / decel',`${axMotor.toFixed(2)} g / ${axBrake.toFixed(2)} g`],
+    ['Wheel lift',lift.length?lift.join(', ')+' unloaded':'none',lift.length?'hi':'ok']]);
+  return L;
+}
+function renderEffort(M){
+  const P=S.cur,geo=S.geometry(P),v=veh();if(!M)M=ratioModel();
+  const B=(+$('tread').value||190)/1000,mu=+$('muS').value||0.9,pt=(+$('ptrail').value||0)/1000,fr=+$('fric').value||0,R=(+$('swDia').value||260)/2000;
+  const e=Math.abs(geo.scrub)/1000,mt=geo.trail/1000;
+  // derivatives of each road wheel angle w.r.t. steering wheel angle at a given SW angle
+  const dd=sw=>{const a=M.wheels(sw-1),b=M.wheels(sw+1);if(!a||!b)return null;return {l:Math.abs(b.dl-a.dl)/2,r:Math.abs(b.dr-a.dr)/2,at:M.wheels(sw)};};
+  const L0=loads(0,0);
+  const Tkp=Fz=>Fz*mu*Math.sqrt(B*B/8+e*e);
+  const d45=dd(Math.min(45,M.lock*0.4));
+  const Tstat=d45?(Tkp(L0.FL)*d45.l+Tkp(L0.FR)*d45.r+fr*(d45.l+d45.r)):NaN;
+  // skidpad: find SW angle giving the kinematic steer for the radius
+  const Rk=Math.max(3,+$('skidR').value||9.1),dK=deg(Math.atan(v.L/Rk));let lo=0,hi=M.lock;for(let i=0;i<30;i++){const m=(lo+hi)/2,w=M.wheels(m);if(!w)break;((w.dl+w.dr)/2<dK)?lo=m:hi=m;}
+  const swS=(lo+hi)/2,ayS=(Math.pow(Math.sqrt(1.4*G*Rk),2)/Rk)/G; // lateral g at the skidpad from current slider if set, else 1.4
+  const ayUse=Math.abs(+$('ay').value)>0.05?Math.abs(+$('ay').value):ayS;
+  const Ls=loads(ayUse,0),Fi=Ls.FL,Fo=Ls.FR,FyT=ayUse*G*v.m*v.wdf,Fyi=FyT*Fi/(Fi+Fo),Fyo=FyT*Fo/(Fi+Fo);
+  const dS=dd(swS);const Mzi=(mt+pt)*Fyi,Mzo=(mt+pt)*Fyo;
+  const Tcorn=dS?(Mzi*dS.l+Mzo*dS.r+fr*(dS.l+dS.r)):NaN;
+  const tile=(t,val,sub,det)=>{const cls=val<=5?'ok':val<=10?'mid':'hi',lab=val<=5?'✓ At or under 5 N·m target':val<=10?'! Over target, under 10 N·m max':'✕ Over 10 N·m max';
+    return `<div class="et"><div class="label">${t}</div><div class="ev">${f1(val)}<small>N·m at wheel</small></div><div class="pill ${cls}">${lab}</div><div class="hint">${sub}</div>${det}</div>`;};
+  $('effortOut').innerHTML=
+    tile('Static (parked)',Tstat,`${f0(Tstat/R)} N at the rim of a ${f0(R*2000)} mm wheel`,kv([['Front wheel load',f0(L0.FL)+' N each'],['Scrub radius used',f1(e*1000)+' mm'],['Kingpin torque per wheel',f1(Tkp(L0.FL))+' N·m'],['Road wheel per wheel degree',d45?(d45.l).toFixed(3)+'°/°':'–']]))+
+    tile(`Skidpad (${ayUse.toFixed(2)} g, R ${Rk.toFixed(1)} m)`,Tcorn,`${f0(Tcorn/R)} N at the rim · wheel at ${f0(swS)}°`,kv([['Inner / outer F<sub>z</sub>',`${f0(Fi)} / ${f0(Fo)} N`],['Inner / outer F<sub>y</sub>',`${f0(Fyi)} / ${f0(Fyo)} N`],['Mechanical + pneumatic trail',`${f1(mt*1000)} + ${f1(pt*1000)} mm`],['Aligning moment total',f1(Mzi+Mzo)+' N·m']]));
+}
+
+function renderAll(){if(!S.cur)return;renderRC();const M=renderRatio();renderLoads();renderEffort(M);}
+buildParams();
+$('resetEV2').addEventListener('click',()=>{EV2.forEach(([k,,v])=>$('vp-'+k).value=v);renderAll();});
+['useHpRC','cfac','uj1','uj2','ujPlane','ujPhase','swDia','tread','muS','ptrail','skidR','fric'].forEach(id=>$(id).addEventListener('input',renderAll));
+['ay','ax'].forEach(id=>$(id).addEventListener('input',()=>{renderLoads();renderEffort();}));
+document.querySelectorAll('#loads [data-p]').forEach(b=>b.addEventListener('click',()=>{let [a,x]=b.dataset.p.split(',');const v=veh();if(x==='acc')x=Math.min(1.5,(v.tm/v.rw)/(v.m*G));$('ay').value=a;$('ax').value=x;renderLoads();renderEffort();}));
+S.listeners.push(renderAll);
+addEventListener('resize',renderAll);
+renderAll();
+if(document.fonts)document.fonts.ready.then(renderAll);
+})();
+
 </script>
 </body>
 </html>
