@@ -1,0 +1,665 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Steering Sandbox</title>
+<meta name="description" content="Import FSAE steering hardpoints from Fusion 360 and see Ackermann, scrub radius, KPI, caster and bump steer. Tweak the geometry and compare against your CAD baseline.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..900&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+:root{
+  --paper:#E9ECEF; --sheet:#F7F8F9; --ink:#141922; --ink-2:#525C6B; --rule:#C6CDD5; --grid:rgba(20,25,34,.05);
+  --accent:#1E55D6; --accent-soft:rgba(30,85,214,.12); --base:#8A93A0; --ideal:#11875B; --warn:#C2410C; --tire:#232A35;
+  --display:"Archivo","Arial Narrow",system-ui,sans-serif;
+  --body:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --paper:#0E1116; --sheet:#151920; --ink:#E4E8EE; --ink-2:#9AA4B2; --rule:#2A313C; --grid:rgba(228,232,238,.04);
+  --accent:#7EA2FF; --accent-soft:rgba(126,162,255,.14); --base:#6B7482; --ideal:#43C08D; --warn:#F28B54; --tire:#3A4250; color-scheme:dark;}}
+:root[data-theme="dark"]{
+  --paper:#0E1116; --sheet:#151920; --ink:#E4E8EE; --ink-2:#9AA4B2; --rule:#2A313C; --grid:rgba(228,232,238,.04);
+  --accent:#7EA2FF; --accent-soft:rgba(126,162,255,.14); --base:#6B7482; --ideal:#43C08D; --warn:#F28B54; --tire:#3A4250; color-scheme:dark;}
+
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html{background:var(--paper)}
+body{margin:0;background:var(--paper);color:var(--ink);font:15px/1.55 var(--body);
+  background-image:linear-gradient(var(--grid) 1px,transparent 1px),linear-gradient(90deg,var(--grid) 1px,transparent 1px);background-size:20px 20px;
+  padding-inline:clamp(16px,3vw,40px);padding-block:clamp(16px,3vw,32px)}
+a{color:var(--accent)}
+button,input,select{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.wrap{max-width:1240px;margin:0 auto;display:flex;flex-direction:column;gap:18px}
+.label{font:500 10.5px/1.3 var(--mono);letter-spacing:.12em;text-transform:uppercase;color:var(--ink-2)}
+.panel{background:var(--sheet);border:1.5px solid var(--ink)}
+.panel-h{display:flex;justify-content:space-between;align-items:baseline;gap:12px;padding:10px 14px;border-bottom:1px solid var(--ink);flex-wrap:wrap}
+.panel-h h2{font:750 15px/1.2 var(--display);font-variation-settings:"wdth" 100;margin:0;letter-spacing:.01em}
+
+/* header */
+header{display:grid;grid-template-columns:1fr auto;gap:16px 24px;align-items:end}
+h1{font-family:var(--display);font-variation-settings:"wdth" 125;font-weight:850;font-size:clamp(34px,6vw,64px);line-height:.92;margin:6px 0 8px;letter-spacing:-.015em}
+.sub{margin:0;color:var(--ink-2);max-width:62ch}
+.actions{display:flex;flex-wrap:wrap;gap:8px;justify-content:flex-end}
+.btn{font:500 13px/1 var(--mono);padding:10px 13px;border:1.5px solid var(--ink);background:var(--sheet);cursor:pointer;text-decoration:none;color:var(--ink);display:inline-flex;align-items:center;gap:6px}
+.btn.primary{background:var(--ink);color:var(--sheet)}
+.btn:hover{background:var(--accent);border-color:var(--accent);color:#fff}
+@media (max-width:760px){header{grid-template-columns:1fr}.actions{justify-content:flex-start}}
+
+/* status */
+#status{font:400 13px/1.5 var(--mono);padding:10px 14px;border-left:3px solid var(--ideal);background:var(--sheet);color:var(--ink-2)}
+#status.err{border-left-color:var(--warn);color:var(--ink)}
+#status b{color:var(--ink);font-weight:500}
+
+/* metrics */
+.metrics{display:grid;grid-template-columns:repeat(8,1fr);border:1.5px solid var(--ink);background:var(--sheet)}
+.m{padding:12px 12px 10px;border-right:1px solid var(--rule);min-width:0}
+.m:last-child{border-right:0}
+.m .v{font:800 26px/1.05 var(--display);font-variation-settings:"wdth" 100;font-variant-numeric:tabular-nums;margin-top:4px;white-space:nowrap}
+.m .v small{font:500 12px var(--mono);color:var(--ink-2);margin-left:2px}
+.m .d{font:400 11.5px/1.4 var(--mono);color:var(--ink-2);margin-top:3px;white-space:nowrap;font-variant-numeric:tabular-nums}
+.m .d.up{color:var(--accent)}
+@media (max-width:1100px){.metrics{grid-template-columns:repeat(4,1fr)}.m:nth-child(4n){border-right:0}.m:nth-child(-n+4){border-bottom:1px solid var(--rule)}}
+@media (max-width:520px){.metrics{grid-template-columns:repeat(2,1fr)}.m:nth-child(2n){border-right:0}.m:nth-child(-n+6){border-bottom:1px solid var(--rule)}}
+
+/* views */
+.views{display:grid;grid-template-columns:1.15fr 1fr;gap:18px}
+@media (max-width:900px){.views{grid-template-columns:1fr}}
+.stack{display:flex;flex-direction:column;gap:18px;min-width:0}
+canvas{display:block;width:100%;max-width:100%;touch-action:none}
+#top{aspect-ratio:1/1.08}
+#front{aspect-ratio:16/10}
+.chart{aspect-ratio:16/10}
+.steerbar{display:grid;grid-template-columns:auto 1fr auto;gap:12px;align-items:center;padding:10px 14px;border-top:1px solid var(--rule)}
+.steerbar output{font:500 13px var(--mono);font-variant-numeric:tabular-nums;min-width:12ch;text-align:right}
+input[type=range]{width:100%;accent-color:var(--accent)}
+.legend{display:flex;flex-wrap:wrap;gap:14px;font:400 11.5px var(--mono);color:var(--ink-2)}
+.legend i{display:inline-block;width:18px;height:0;border-top:2.5px solid;vertical-align:middle;margin-right:5px}
+.hint{font:400 12px/1.4 var(--mono);color:var(--ink-2)}
+.charts{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+@media (max-width:760px){.charts{grid-template-columns:1fr}}
+
+/* table */
+.tbl-wrap{overflow-x:auto}
+table{border-collapse:collapse;width:100%;min-width:720px;font-size:13.5px}
+th{font:500 10.5px/1.3 var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--ink-2);text-align:left;padding:8px 10px;border-bottom:1px solid var(--ink);background:var(--paper)}
+td{padding:6px 10px;border-bottom:1px solid var(--rule);font-variant-numeric:tabular-nums}
+tr:last-child td{border-bottom:0}
+td.key{font:500 13px var(--mono);white-space:nowrap}
+td.key span{display:block;font:400 12px var(--body);color:var(--ink-2)}
+td.bl{font:400 12.5px var(--mono);color:var(--base);white-space:nowrap}
+td input{width:84px;padding:5px 6px;border:1px solid var(--rule);background:var(--paper);font:400 13px var(--mono);text-align:right}
+td input.changed{border-color:var(--accent);background:var(--accent-soft)}
+td.miss{color:var(--ink-2);font-style:italic}
+.params{display:flex;flex-wrap:wrap;gap:14px 22px;padding:12px 14px;border-top:1px solid var(--ink);align-items:end}
+.params label{display:flex;flex-direction:column;gap:4px}
+.params input,.params select{padding:6px 8px;border:1px solid var(--rule);background:var(--paper);font:400 13px var(--mono);width:120px}
+.params select{width:auto}
+
+/* how-to */
+.howto{display:grid;grid-template-columns:repeat(3,1fr);gap:0}
+.howto > div{padding:16px;border-right:1px solid var(--rule)}
+.howto > div:last-child{border-right:0}
+.howto h3{font:750 17px/1.2 var(--display);margin:6px 0 8px}
+.howto p,.howto li{font-size:14px;color:var(--ink-2);margin:0 0 8px}
+.howto ol{padding-left:18px;margin:0}
+code,.code{font:400 12.5px var(--mono);background:var(--paper);border:1px solid var(--rule);padding:1px 5px}
+pre.code{display:block;padding:10px;overflow-x:auto;white-space:pre;margin:8px 0 0;line-height:1.5}
+@media (max-width:860px){.howto{grid-template-columns:1fr}.howto > div{border-right:0;border-bottom:1px solid var(--rule)}.howto > div:last-child{border-bottom:0}}
+footer{font:400 12px var(--mono);color:var(--ink-2);display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px}
+#drop{position:fixed;inset:0;background:rgba(30,85,214,.18);border:3px dashed var(--accent);display:grid;place-items:center;font:800 28px var(--display);color:var(--ink);z-index:9;pointer-events:none}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <div class="label">FSAE · Front suspension · Steering kinematics</div>
+      <h1>Steering Sandbox</h1>
+      <p class="sub">Load your front-corner hardpoints from Fusion 360. The sandbox rebuilds the linkage, solves it through full lock and wheel travel, and lets you move points to compare against your CAD baseline.</p>
+    </div>
+    <div class="actions">
+      <label class="btn primary" for="file">Import from Fusion 360</label>
+      <input id="file" class="sr" type="file" accept=".csv,.json,.txt">
+      <button class="btn" id="loadSample" type="button">Load sample car</button>
+      <button class="btn" id="reset" type="button">Reset to baseline</button>
+      <button class="btn" id="rebase" type="button">Set current as baseline</button>
+      <button class="btn" id="export" type="button">Download CSV</button>
+    </div>
+  </header>
+
+  <div id="status" role="status">Loading sample car…</div>
+
+  <div class="metrics" id="metrics"></div>
+
+  <div class="views">
+    <div class="panel">
+      <div class="panel-h"><h2>Top view</h2><span class="hint">Drag the blue tie-rod ends. Dashed lines should meet on the rear axle.</span></div>
+      <canvas id="top" aria-label="Top view of the front axle with steered wheels and Ackermann lines"></canvas>
+      <div class="steerbar">
+        <label class="label" for="steer">Rack</label>
+        <input id="steer" type="range" min="-100" max="100" value="60" step="1">
+        <output id="steerOut">0 mm</output>
+      </div>
+    </div>
+    <div class="stack">
+      <div class="panel">
+        <div class="panel-h"><h2>Front view · left corner</h2><span class="hint">Drag tie-rod ends up or down to tune bump steer.</span></div>
+        <canvas id="front" aria-label="Front view with kingpin axis, scrub radius and tie rod"></canvas>
+      </div>
+      <div class="panel">
+        <div class="panel-h"><h2>Legend</h2></div>
+        <div style="padding:12px 14px" class="legend">
+          <span><i style="border-color:var(--accent)"></i>Current design</span>
+          <span><i style="border-color:var(--base);border-top-style:dashed"></i>Fusion baseline</span>
+          <span><i style="border-color:var(--ideal);border-top-style:dashed"></i>100% Ackermann</span>
+          <span><i style="border-color:var(--rule);border-top-style:dotted"></i>Parallel steer (0%)</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="charts">
+    <div class="panel">
+      <div class="panel-h"><h2>Ackermann curve</h2><span class="label">Outer vs inner wheel angle</span></div>
+      <canvas id="ackChart" class="chart" aria-label="Outer wheel angle versus inner wheel angle"></canvas>
+    </div>
+    <div class="panel">
+      <div class="panel-h"><h2>Bump steer</h2><span class="label">Toe change vs wheel travel</span></div>
+      <canvas id="bumpChart" class="chart" aria-label="Toe change versus vertical wheel travel"></canvas>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-h"><h2>Hardpoints</h2><span class="hint">mm · +X forward · +Y outboard (left) · +Z up · ground at Z = 0</span></div>
+    <div class="tbl-wrap"><table>
+      <thead><tr><th>Point</th><th>Baseline X</th><th>Y</th><th>Z</th><th>Current X</th><th>Y</th><th>Z</th></tr></thead>
+      <tbody id="hp"></tbody>
+    </table></div>
+    <div class="params">
+      <label><span class="label">Wheelbase (mm)</span><input id="wb" type="number" step="5" value="1550"></label>
+      <label><span class="label">Rack travel ± (mm)</span><input id="travel" type="number" step="1" value="30"></label>
+      <label><span class="label">Import: CAD forward axis</span><select id="axF"><option>+X</option><option>-X</option><option>+Y</option><option>-Y</option><option>+Z</option><option>-Z</option></select></label>
+      <label><span class="label">Import: CAD up axis</span><select id="axU"><option>+Z</option><option>+Y</option><option>-Z</option><option>-Y</option><option>+X</option><option>-X</option></select></label>
+      <label><span class="label">Import units</span><select id="units"><option value="auto">Auto</option><option value="mm">mm</option><option value="cm">cm</option><option value="in">in</option></select></label>
+      <button class="btn" id="reimport" type="button">Re-read last file</button>
+    </div>
+  </div>
+
+  <div class="panel" id="fusion">
+    <div class="panel-h"><h2>Import from Fusion 360</h2><span class="label">Three ways in</span></div>
+    <div class="howto">
+      <div>
+        <div class="label">Option 1 · Recommended</div>
+        <h3>Run the export script</h3>
+        <ol>
+          <li>Put a construction point at each hardpoint of one front corner and name it <code>LBJ</code>, <code>UBJ</code>, <code>OTR</code>, <code>ITR</code>, <code>WC</code>, <code>CP</code>. Add <code>LCA_F</code>, <code>LCA_R</code>, <code>UCA_F</code>, <code>UCA_R</code> for bump steer.</li>
+          <li>Download <a href="export_hardpoints.py">export_hardpoints.py</a>.</li>
+          <li>In Fusion: Utilities → Add-Ins → Scripts and Add-Ins → Create → Script (Python), name it <code>export_hardpoints</code>, click Edit, and paste the file over the template.</li>
+          <li>Run it, save the CSV, and drop it on this page.</li>
+        </ol>
+      </div>
+      <div>
+        <div class="label">Option 2</div>
+        <h3>Hardpoint CSV or JSON</h3>
+        <p>Any file with a name and X, Y, Z per row. Names are matched loosely, so <code>Lower Ball Joint</code>, <code>lca_outer</code> and <code>LBJ</code> all work. Scalar rows like <code>wheelbase</code> and <code>tire_radius</code> are read too.</p>
+<pre class="code">name,x_mm,y_mm,z_mm
+LBJ,5,560,120
+UBJ,-10,540,300
+OTR,-70,515,150
+ITR,-55,205,132.5
+WC,0,590,228
+CP,0,600,0
+wheelbase,1550,,</pre>
+        <p style="margin-top:8px"><a href="sample_hardpoints.csv">Download the sample CSV</a></p>
+      </div>
+      <div>
+        <div class="label">Option 3</div>
+        <h3>Fusion parameters CSV</h3>
+        <p>If your hardpoints live as user parameters (for example <code>LBJ_x</code>, <code>LBJ_y</code>, <code>LBJ_z</code>), export them with a parameter CSV exporter and drop the file here. The Unit column is respected.</p>
+        <p><b>Axes:</b> Fusion is often Y-up. Set the CAD forward and up axes above before importing, or after importing and click Re-read last file. A right-side corner is mirrored automatically.</p>
+        <p><b>Note:</b> the car centerline should sit at CAD lateral = 0. Ground comes from the contact patch, or from the wheel center minus <code>tire_radius</code>.</p>
+      </div>
+    </div>
+  </div>
+
+  <footer><span>Steering Sandbox · built by <a href="https://ggps4.github.io/">Benjamin Novofastovsky</a></span><span>Rigid-body kinematic solve · no compliance · angles in degrees</span></footer>
+</div>
+<div id="drop" hidden>Drop your hardpoints file</div>
+
+<script>
+(function(){
+'use strict';
+/* ---------- vector math ---------- */
+const V=(x,y,z)=>({x,y,z});
+const add=(a,b)=>V(a.x+b.x,a.y+b.y,a.z+b.z), sub=(a,b)=>V(a.x-b.x,a.y-b.y,a.z-b.z), mul=(a,s)=>V(a.x*s,a.y*s,a.z*s);
+const dot=(a,b)=>a.x*b.x+a.y*b.y+a.z*b.z, cross=(a,b)=>V(a.y*b.z-a.z*b.y,a.z*b.x-a.x*b.z,a.x*b.y-a.y*b.x);
+const len=a=>Math.hypot(a.x,a.y,a.z), unit=a=>{const l=len(a)||1;return mul(a,1/l);};
+const deg=r=>r*180/Math.PI, rad=d=>d*Math.PI/180;
+function axisMat(k,t){const c=Math.cos(t),s=Math.sin(t),C=1-c,{x,y,z}=k;
+  return [[c+x*x*C,x*y*C-z*s,x*z*C+y*s],[y*x*C+z*s,c+y*y*C,y*z*C-x*s],[z*x*C-y*s,z*y*C+x*s,c+z*z*C]];}
+const mv=(M,v)=>V(M[0][0]*v.x+M[0][1]*v.y+M[0][2]*v.z,M[1][0]*v.x+M[1][1]*v.y+M[1][2]*v.z,M[2][0]*v.x+M[2][1]*v.y+M[2][2]*v.z);
+function mm(A,B){const R=[[0,0,0],[0,0,0],[0,0,0]];for(let i=0;i<3;i++)for(let j=0;j<3;j++)for(let k=0;k<3;k++)R[i][j]+=A[i][k]*B[k][j];return R;}
+function alignMat(a,b){const c=cross(a,b),s=len(c),d=dot(a,b);if(s<1e-12)return [[1,0,0],[0,1,0],[0,0,1]];return axisMat(mul(c,1/s),Math.atan2(s,d));}
+const rotAbout=(p,o,k,t)=>add(mv(axisMat(k,t),sub(p,o)),o);
+function solve(f,lo,hi){ // root nearest 0 via scan + bisection
+  const N=72;let best=null,prev=f(lo),px=lo;
+  for(let i=1;i<=N;i++){const x=lo+(hi-lo)*i/N,v=f(x);
+    if(isFinite(prev)&&isFinite(v)&&prev*v<=0){const mid=(px+x)/2;if(!best||Math.abs(mid)<Math.abs((best[0]+best[1])/2))best=[px,x];}
+    prev=v;px=x;}
+  if(!best)return NaN;let [a,b]=best,fa=f(a);
+  for(let i=0;i<60;i++){const m=(a+b)/2,fm=f(m);if(fa*fm<=0)b=m;else{a=m;fa=fm;}}
+  return (a+b)/2;
+}
+
+/* ---------- point catalogue ---------- */
+const KEYS=[
+  ['LBJ','Lower ball joint',true],['UBJ','Upper ball joint',true],['OTR','Outer tie rod',true],['ITR','Inner tie rod / rack end',true],
+  ['WC','Wheel center',true],['CP','Contact patch',true],['LCA_F','Lower arm, front inner',false],['LCA_R','Lower arm, rear inner',false],
+  ['UCA_F','Upper arm, front inner',false],['UCA_R','Upper arm, rear inner',false]];
+const SAMPLE=`# Steering Sandbox sample (mm, +X fwd, +Y left, +Z up)
+name,x_mm,y_mm,z_mm
+LCA_F,120,230,110
+LCA_R,-120,230,105
+UCA_F,110,290,260
+UCA_R,-110,290,265
+LBJ,5,560,120
+UBJ,-10,540,300
+OTR,-70,515,150
+ITR,-55,205,132.5
+WC,0,590,228
+CP,0,600,0
+wheelbase,1550,,`;
+
+/* ---------- name matching ---------- */
+function tokens(name){return String(name).replace(/([a-z])([A-Z])/g,'$1 $2').toLowerCase().split(/[^a-z0-9]+/).filter(Boolean);}
+function classify(name){
+  const t=tokens(name), s=new Set(t), j=t.join(''), has=(...w)=>w.some(x=>s.has(x));
+  if(!t.length)return null;
+  if(j==='wheelbase'||has('wheelbase')||j==='wb')return 'wheelbase';
+  if(has('tire','tyre','wheel')&&has('radius','rad')||j==='tireradius'||j==='rl')return 'tire_radius';
+  if(has('rack')&&has('travel','stroke'))return 'rack_travel';
+  if(j==='lbj'||j==='ubj'||j==='otr'||j==='itr'||j==='wc'||j==='cp')return j.toUpperCase();
+  if(has('contact')||(has('ground')&&has('point','patch')))return 'CP';
+  if(has('wheel','hub','axle','spindle')&&has('center','centre','ctr','c','centerpoint'))return 'WC';
+  if(j.includes('tierod')||j.includes('steeringarm')||j.includes('toelink')||has('rack','tie','itr','otr')){
+    if(has('inner','inboard','in','i','rack','itr','chassis'))return 'ITR';
+    if(has('outer','outboard','out','o','otr','upright','arm','knuckle','end','steering'))return 'OTR';
+    return null;}
+  const lower=has('lower','lca','lwr','bottom','lbj','lwb')||t[0]==='l', upper=has('upper','uca','upr','top','ubj','uwb')||t[0]==='u';
+  if(lower===upper)return null;
+  const P=lower?'L':'U';
+  if(has('front','fore','f','fwd','forward','fr','frontinner'))return P+'CA_F';
+  if(has('rear','aft','r','back','rr'))return P+'CA_R';
+  if(has('ball','bj','lbj','ubj','outer','outboard','upright','o','joint','knuckle'))return P+'BJ';
+  return null;
+}
+function num(v){if(v==null)return NaN;const m=String(v).replace(',', '.').match(/-?\d+(\.\d+)?(e-?\d+)?/i);return m?parseFloat(m[0]):NaN;}
+function unitScale(u){u=String(u||'').toLowerCase();if(/\bcm\b|centim/.test(u))return 10;if(/\bmm\b|millim/.test(u))return 1;if(/\bin\b|inch|"/.test(u))return 25.4;if(/\bm\b|meter|metre/.test(u))return 1000;return null;}
+
+function parseFile(text){
+  const out={points:{},scalars:{},hints:{},unknown:[],raw:[]};
+  text=text.replace(/^﻿/,'').trim();
+  if(text.startsWith('{')||text.startsWith('[')){
+    const d=JSON.parse(text), rows=Array.isArray(d)?d:Object.entries(d.points||d).map(([k,v])=>Array.isArray(v)?{name:k,x:v[0],y:v[1],z:v[2]}:typeof v==='object'?{name:k,...v}:{name:k,x:v});
+    if(d.wheelbase)rows.push({name:'wheelbase',x:d.wheelbase});
+    rows.forEach(r=>out.raw.push({name:r.name,x:num(r.x),y:num(r.y),z:num(r.z),scale:null}));
+  } else {
+    const lines=text.split(/\r?\n/);
+    lines.filter(l=>/^\s*#/.test(l)).forEach(l=>{const m=l.match(/fusion_up\s*=\s*([XYZ])/i);if(m)out.hints.up=m[1].toUpperCase();});
+    const body=lines.filter(l=>l.trim()&&!/^\s*#/.test(l));
+    const delim=[',',';','\t'].map(d=>[d,(body[0]||'').split(d).length]).sort((a,b)=>b[1]-a[1])[0][0];
+    const split=l=>l.split(delim).map(c=>c.trim().replace(/^"|"$/g,''));
+    let head=split(body[0]||''), start=0;
+    const isHeader=head.some(c=>/^(name|point|x|y|z|x_mm|value|expression|unit)/i.test(c))&&!head.slice(1).some(c=>isFinite(parseFloat(c)));
+    if(isHeader)start=1; else head=[];
+    const H=head.map(h=>h.toLowerCase());
+    const headScale=unitScale(H.join(' ').replace(/_/g,' '));
+    const vi=H.findIndex(h=>h==='value'), ei=H.findIndex(h=>h==='expression'), ui=H.findIndex(h=>h==='unit'||h==='units');
+    const paramMode=vi>=0||ei>=0;
+    if(paramMode){
+      const grp={};
+      body.slice(start).forEach(l=>{const c=split(l),name=c[0]||'';const m=name.match(/^(.*?)[\s_.-]*([xyz])$/i);
+        const valStr=(vi>=0?c[vi]:'')||(ei>=0?c[ei]:'');const v=num(valStr);
+        const sc=unitScale(ui>=0?c[ui]:'')||unitScale(valStr);
+        if(m&&isFinite(v)){(grp[m[1]]=grp[m[1]]||{name:m[1],scale:sc})[m[2].toLowerCase()]=v;}
+        else if(isFinite(v))out.raw.push({name,x:v,y:NaN,z:NaN,scale:sc});});
+      Object.values(grp).forEach(g=>out.raw.push({name:g.name,x:g.x,y:g.y,z:g.z,scale:g.scale}));
+    } else {
+      body.slice(start).forEach(l=>{const c=split(l);const name=c[0];const nums=c.slice(1).map(num);
+        out.raw.push({name,x:nums[0],y:nums[1],z:nums[2],scale:headScale});});
+    }
+  }
+  return out;
+}
+
+function toVehicle(parsed,opts){
+  const axes={'+X':V(1,0,0),'-X':V(-1,0,0),'+Y':V(0,1,0),'-Y':V(0,-1,0),'+Z':V(0,0,1),'-Z':V(0,0,-1)};
+  const F=axes[opts.fwd],U=axes[opts.up];
+  if(Math.abs(dot(F,U))>0.5)throw new Error('Forward and up axes must be different. Change one of the import axis settings.');
+  const Lt=cross(U,F);
+  const P={},S={},unknown=[],mapped=[];
+  let maxAbs=0;
+  parsed.raw.forEach(r=>{
+    const key=classify(r.name);
+    const sc=opts.units!=='auto'?unitScale(opts.units):(r.scale||1);
+    if(!key){unknown.push(r.name);return;}
+    if(key==='wheelbase'||key==='tire_radius'||key==='rack_travel'){if(isFinite(r.x))S[key]=r.x*sc;mapped.push(r.name+'→'+key);return;}
+    if(![r.x,r.y,r.z].every(isFinite)){unknown.push(r.name+' (missing X/Y/Z)');return;}
+    const p=V(r.x*sc,r.y*sc,r.z*sc);maxAbs=Math.max(maxAbs,Math.abs(p.x),Math.abs(p.y),Math.abs(p.z));
+    if(P[key])return; // first wins
+    P[key]=V(dot(p,F),dot(p,Lt),dot(p,U));mapped.push(r.name+'→'+key);
+  });
+  const need=['LBJ','UBJ','OTR','ITR'];
+  if(!P.CP&&P.WC&&S.tire_radius)P.CP=V(P.WC.x,P.WC.y,P.WC.z-S.tire_radius);
+  if(!P.WC&&P.CP&&S.tire_radius)P.WC=V(P.CP.x,P.CP.y,P.CP.z+S.tire_radius);
+  const missing=need.filter(k=>!P[k]);
+  if(!P.CP)missing.push('CP (or WC + tire_radius)');
+  if(!P.WC)missing.push('WC (or CP + tire_radius)');
+  if(missing.length)throw new Error('Missing hardpoints: '+missing.join(', ')+'. Name them in Fusion as shown under "Import from Fusion 360" below.'+(unknown.length?' Unrecognized names: '+unknown.slice(0,8).join(', ')+'.':''));
+  // ground at CP, mirror right side to left
+  const g=P.CP.z, mir=P.LBJ.y<0?-1:1;
+  Object.keys(P).forEach(k=>{P[k]=V(P[k].x,P[k].y*mir,P[k].z-g);});
+  return {P,S,unknown,mapped,mirrored:mir<0,maxAbs};
+}
+
+/* ---------- kinematics ---------- */
+const HEAD=V(1,0,0), SPIN=V(0,1,0);
+function steerAt(P,dy){ // returns {th, delta(deg, + = nose toward +Y), R}
+  const k=unit(sub(P.UBJ,P.LBJ)), L=len(sub(P.OTR,P.ITR)), itr=add(P.ITR,V(0,dy,0));
+  const f=t=>len(sub(rotAbout(P.OTR,P.LBJ,k,t),itr))-L;
+  const th=solve(f,-1.3,1.3); if(!isFinite(th))return null;
+  const R=axisMat(k,th), h=mv(R,HEAD);
+  return {th,R,k,delta:deg(Math.atan2(h.y,h.x))};
+}
+function geometry(P){
+  const k=unit(sub(P.UBJ,P.LBJ)), dz=P.UBJ.z-P.LBJ.z;
+  const kpi=deg(Math.atan2(P.LBJ.y-P.UBJ.y,dz)), caster=deg(Math.atan2(P.LBJ.x-P.UBJ.x,dz));
+  const t=-P.LBJ.z/(k.z||1e-9), G=add(P.LBJ,mul(k,t));
+  return {kpi,caster,G,scrub:P.CP.y-G.y,trail:G.x-P.CP.x,trackKP:2*G.y,trackCP:2*P.CP.y,tie:len(sub(P.OTR,P.ITR))};
+}
+function ackermann(P,wb,travel){
+  const geo=geometry(P), T=geo.trackKP;
+  const probe=steerAt(P,-3); const dir=probe&&probe.delta>0?-1:1; // rack direction that turns the left wheel left
+  const pts=[];
+  for(let i=0;i<=40;i++){const u=travel*i/40, dy=dir*u;
+    const L=steerAt(P,dy), R=steerAt(P,-dy); if(!L||!R)break;
+    const di=L.delta, dout=-R.delta; if(i&&di<=0)break;
+    const ideal=di>0.01?deg(Math.atan(wb/(wb/Math.tan(rad(di))+T))):0;
+    pts.push({u,di,do:dout,ideal,ack:di>0.2?(di-dout)/(di-ideal)*100:NaN});}
+  return {pts,dir,lock:pts[pts.length-1]||null,reached:pts.length===41};
+}
+function bumpAt(P,phi,base){
+  const la=unit(sub(P.LCA_R,P.LCA_F)), ua=unit(sub(P.UCA_R,P.UCA_F));
+  const lbj=rotAbout(P.LBJ,P.LCA_F,la,phi), dU=len(sub(P.UBJ,P.LBJ));
+  const psi=solve(p=>len(sub(rotAbout(P.UBJ,P.UCA_F,ua,p),lbj))-dU,-0.9,0.9); if(!isFinite(psi))return null;
+  const ubj=rotAbout(P.UBJ,P.UCA_F,ua,psi);
+  const R1=alignMat(unit(sub(P.UBJ,P.LBJ)),unit(sub(ubj,lbj)));
+  const map=p=>add(mv(R1,sub(p,P.LBJ)),lbj), otr1=map(P.OTR), k2=unit(sub(ubj,lbj)), L=len(sub(P.OTR,P.ITR));
+  const chi=solve(c=>len(sub(rotAbout(otr1,lbj,k2,c),P.ITR))-L,-0.8,0.8); if(!isFinite(chi))return null;
+  const R=mm(axisMat(k2,chi),R1), wc=add(mv(R,sub(P.WC,P.LBJ)),lbj), h=mv(R,HEAD), s=mv(R,SPIN);
+  return {dz:wc.z-P.WC.z,toe:-deg(Math.atan2(h.y,h.x)),camber:-deg(Math.asin(Math.max(-1,Math.min(1,s.z))))};
+}
+function bump(P){
+  if(!['LCA_F','LCA_R','UCA_F','UCA_R'].every(k=>P[k]))return null;
+  const arm=len(sub(P.LBJ,P.LCA_F))||300, span=Math.min(0.35,60/arm), pts=[];
+  for(let i=0;i<=60;i++){const b=bumpAt(P,-span+2*span*i/60);if(b&&Math.abs(b.dz)<=32)pts.push(b);}
+  pts.sort((a,b)=>a.dz-b.dz); if(pts.length<5)return null;
+  const near=(z)=>{let best=pts[0];pts.forEach(p=>{if(Math.abs(p.dz-z)<Math.abs(best.dz-z))best=p;});return best;};
+  const up=near(25),dn=near(-25);
+  return {pts,rate:(up.toe-dn.toe)/((up.dz-dn.dz)/25),camber:(up.camber-dn.camber)/((up.dz-dn.dz)/25)};
+}
+function analyze(P,wb,travel){const geo=geometry(P);return {geo,ack:ackermann(P,wb,travel),bump:bump(P)};}
+
+/* ---------- state ---------- */
+let base=null, cur=null, lastText=null, lastName='sample_hardpoints.csv';
+const $=id=>document.getElementById(id);
+const clone=P=>Object.fromEntries(Object.entries(P).map(([k,v])=>[k,V(v.x,v.y,v.z)]));
+function setStatus(html,err){const s=$('status');s.innerHTML=html;s.classList.toggle('err',!!err);}
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+function load(text,name){
+  lastText=text;lastName=name;
+  try{
+    const parsed=parseFile(text);
+    if(!load.userAxes){$('axF').value='+X';$('axU').value=parsed.hints.up==='Y'?'+Y':'+Z';}
+    const r=toVehicle(parsed,{fwd:$('axF').value,up:$('axU').value,units:$('units').value});
+    if(r.S.wheelbase)$('wb').value=Math.round(r.S.wheelbase);
+    if(r.S.rack_travel)$('travel').value=Math.round(r.S.rack_travel);
+    base=clone(r.P);cur=clone(r.P);
+    const notes=[];
+    notes.push(`<b>${esc(name)}</b>: read ${r.mapped.length} points`);
+    if(r.mirrored)notes.push('right-side corner mirrored to the left');
+    if(!bump(cur))notes.push('add LCA_F, LCA_R, UCA_F, UCA_R to get bump steer');
+    if(r.unknown.length)notes.push('ignored: '+esc(r.unknown.slice(0,6).join(', '))+(r.unknown.length>6?'…':''));
+    if(r.maxAbs&&r.maxAbs<150&&$('units').value==='auto')notes.push('values look small, so check the Import units setting (cm?)');
+    const g=geometry(cur);if(g.tie<50||g.tie>800)notes.push('tie rod length looks unusual, so check the axis settings');
+    setStatus(notes.join(' · ')+'.');
+    buildTable();update();
+  }catch(e){setStatus('Could not import <b>'+esc(name)+'</b>: '+esc(e.message),true);}
+}
+
+/* ---------- table ---------- */
+function buildTable(){
+  const tb=$('hp');tb.innerHTML='';
+  KEYS.forEach(([k,label])=>{
+    const tr=document.createElement('tr');
+    if(!base[k]){tr.innerHTML=`<td class="key">${k}<span>${label}</span></td><td class="miss" colspan="6">Not in file${k.includes('CA')?' (needed for bump steer)':''}</td>`;tb.appendChild(tr);return;}
+    const b=base[k];
+    tr.innerHTML=`<td class="key">${k}<span>${label}</span></td>`+['x','y','z'].map(a=>`<td class="bl">${b[a].toFixed(1)}</td>`).join('')+
+      ['x','y','z'].map(a=>`<td><input id="in-${k}-${a}" type="number" step="0.5" aria-label="${label} ${a.toUpperCase()}" data-k="${k}" data-a="${a}"></td>`).join('');
+    tb.appendChild(tr);
+  });
+  tb.querySelectorAll('input').forEach(inp=>inp.addEventListener('input',()=>{const v=parseFloat(inp.value);if(isFinite(v)){cur[inp.dataset.k][inp.dataset.a]=v;update(false);}}));
+  syncTable();
+}
+function syncTable(){
+  KEYS.forEach(([k])=>{if(!cur[k])return;['x','y','z'].forEach(a=>{const el=$(`in-${k}-${a}`);if(!el)return;
+    if(document.activeElement!==el)el.value=cur[k][a].toFixed(1);el.classList.toggle('changed',Math.abs(cur[k][a]-base[k][a])>0.05);});});
+}
+
+/* ---------- metrics ---------- */
+function fmt(v,d=1){return isFinite(v)?v.toFixed(d):'n/a';}
+function renderMetrics(A,B){
+  const lockA=A.ack.lock,lockB=B.ack.lock;
+  const items=[
+    ['Kingpin incl.',A.geo.kpi,B.geo.kpi,'°',1],
+    ['Caster',A.geo.caster,B.geo.caster,'°',1],
+    ['Scrub radius',A.geo.scrub,B.geo.scrub,'mm',1],
+    ['Mech. trail',A.geo.trail,B.geo.trail,'mm',1],
+    ['Ackermann @ lock',lockA&&lockA.ack,lockB&&lockB.ack,'%',0],
+    ['Inner / outer lock',lockA?lockA.di:NaN,lockB?lockB.di:NaN,'°',1,lockA?lockA.do:NaN],
+    ['Bump steer',A.bump?A.bump.rate:NaN,B.bump?B.bump.rate:NaN,'°/25mm',3],
+    ['Tie rod length',A.geo.tie,B.geo.tie,'mm',1]];
+  $('metrics').innerHTML=items.map(([n,a,b,u,d,extra])=>{
+    const delta=a-b, show=isFinite(delta)&&Math.abs(delta)>=Math.pow(10,-d)/2;
+    const val=extra!==undefined?`${fmt(a,d)}<small>/</small>${fmt(extra,d)}<small>${u}</small>`:`${fmt(a,d)}<small>${u}</small>`;
+    return `<div class="m"><div class="label">${n}</div><div class="v">${val}</div><div class="d${show?' up':''}">${show?(delta>0?'+':'')+delta.toFixed(d)+' vs baseline':'= baseline'}</div></div>`;}).join('');
+  if(!A.ack.reached&&A.ack.pts.length)setStatus('The tie rod cannot follow the full rack travel. Lock is reached at '+A.ack.lock.u.toFixed(1)+' mm. Try less travel or move the tie-rod points.',true);
+}
+
+/* ---------- drawing helpers ---------- */
+function css(n){return getComputedStyle(document.documentElement).getPropertyValue(n).trim();}
+function prep(cv){const d=Math.min(2,devicePixelRatio||1),w=cv.clientWidth,h=cv.clientHeight;if(cv.width!==Math.round(w*d)||cv.height!==Math.round(h*d)){cv.width=Math.round(w*d);cv.height=Math.round(h*d);}
+  const c=cv.getContext('2d');c.setTransform(d,0,0,d,0,0);c.clearRect(0,0,w,h);return [c,w,h];}
+function line(c,a,b,col,w=1.5,dash){c.save();c.strokeStyle=col;c.lineWidth=w;if(dash)c.setLineDash(dash);c.beginPath();c.moveTo(a[0],a[1]);c.lineTo(b[0],b[1]);c.stroke();c.restore();}
+function dotp(c,p,r,fill,stroke){c.beginPath();c.arc(p[0],p[1],r,0,Math.PI*2);c.fillStyle=fill;c.fill();if(stroke){c.strokeStyle=stroke;c.lineWidth=1.5;c.stroke();}}
+function text(c,s,x,y,col,align='left',size=11){c.fillStyle=col;c.font=`500 ${size}px "IBM Plex Mono",monospace`;c.textAlign=align;c.fillText(s,x,y);}
+
+let TV=null, FV=null, drag=null, A=null, Bs=null;
+
+function drawTop(){
+  const cv=$('top'),[c,w,h]=prep(cv), P=cur, wb=+$('wb').value||1550;
+  const ink=css('--ink'),ink2=css('--ink-2'),rule=css('--rule'),acc=css('--accent'),base=css('--base'),ideal=css('--ideal'),tire=css('--tire'),warn=css('--warn');
+  const halfW=Math.max(P.CP.y,P.WC.y)+160, s=Math.min(w/(2*halfW+80),h/(wb+560));
+  const cx=w/2, fy=(h-(wb+560)*s)/2+290*s, X0=P.WC.x;
+  const S=(p)=>[cx-p.y*s, fy-(p.x-X0)*s];
+  TV={S,s,cx,fy,X0};
+  // chassis hint + rear axle
+  const rear=-wb+X0;
+  c.save();c.strokeStyle=rule;c.lineWidth=1;c.setLineDash([2,4]);c.beginPath();c.moveTo(cx,10);c.lineTo(cx,h-10);c.stroke();c.restore();
+  line(c,S(V(rear,-halfW+40,0)),S(V(rear,halfW-40,0)),ink2,1.5);
+  text(c,'rear axle · wheelbase '+wb+' mm',cx,S(V(rear,0,0))[1]+18,ink2,'center');
+  [1,-1].forEach(sd=>{const q=S(V(rear,sd*P.CP.y,0));c.save();c.translate(q[0],q[1]);c.fillStyle=tire;c.globalAlpha=.5;c.fillRect(-100*s,-230*s,200*s,460*s);c.restore();});
+  // steer state
+  const travel=+$('travel').value||30, u=+$('steer').value/100*travel, dir=A.ack.dir, dy=dir*u;
+  const sides=[{sd:1,st:steerAt(P,dy)},{sd:-1,st:steerAt(P,-dy)}];
+  const mir=(p,sd)=>V(p.x,p.y*sd,p.z);
+  // rack
+  const rackL=add(P.ITR,V(0,dy,0)), rackR=V(P.ITR.x,-P.ITR.y+dy,P.ITR.z);
+  line(c,S(rackL),S(rackR),ink,4);
+  let ideals=[];
+  sides.forEach(({sd,st})=>{
+    if(!st)return;
+    const Rm=st.R, k=st.k, o=P.LBJ;
+    const rp=p=>mir(add(mv(Rm,sub(p,o)),o),sd);
+    const wc=rp(P.WC), otr=rp(P.OTR), itr=sd>0?rackL:rackR, kp=mir(geometry(P).G,sd);
+    const ang=sd>0?st.delta:-st.delta; // global heading angle
+    // wheel
+    const q=S(wc);c.save();c.translate(q[0],q[1]);c.rotate(-rad(ang));c.fillStyle=tire;c.fillRect(-100*s,-230*s,200*s,460*s);c.restore();
+    // Ackermann line: perpendicular to heading, from wheel center toward car
+    const hd=V(Math.cos(rad(ang)),Math.sin(rad(ang)),0), perp=V(-hd.y,hd.x,0);
+    if(Math.abs(perp.x)>1e-6){const t=(rear-wc.x)/perp.x;const hit=add(wc,mul(perp,t));if(t>0){line(c,S(wc),S(hit),acc,1.3,[6,4]);dotp(c,S(hit),3.5,acc);ideals.push(hit);}}
+    // steering arm + tie rod
+    line(c,S(kp),S(otr),ink2,3);
+    line(c,S(itr),S(otr),acc,3);
+    dotp(c,S(otr),5,sd>0&&u===0?acc:css('--sheet'),acc);
+    dotp(c,S(itr),5,sd>0&&u===0?acc:css('--sheet'),acc);
+    dotp(c,S(kp),3,ink);
+  });
+  // ideal: single turn center where outer wheel's line meets rear axle — show gap
+  if(ideals.length===2){const gap=Math.abs(ideals[0].y-ideals[1].y);
+    text(c,u===0?'straight ahead':`lines miss by ${gap.toFixed(0)} mm on the rear axle`,cx,Math.min(h-12,S(V(rear,0,0))[1]+36),gap<25?ideal:warn,'center');}
+  // baseline ghost of tie rod
+  const bl=base_&&base_.ITR?[S(base_.ITR),S(base_.OTR)]:null;if(bl)line(c,bl[0],bl[1],base,1.2,[4,3]);
+  text(c,'FRONT ↑',10,18,ink2);
+  text(c,u===0?'drag handles to move ITR / OTR':'set rack to 0 to drag',w-10,18,ink2,'right');
+}
+let base_=null;
+
+function drawFront(){
+  const cv=$('front'),[c,w,h]=prep(cv),P=cur;
+  const ink=css('--ink'),ink2=css('--ink-2'),rule=css('--rule'),acc=css('--accent'),tire=css('--tire'),ideal=css('--ideal'),warn=css('--warn'),basec=css('--base');
+  const r=P.WC.z, maxY=Math.max(P.CP.y,P.WC.y)+140, s=Math.min((w-40)/maxY,(h-50)/(2*r+120));
+  const gy=h-28, x0=20;
+  const S=p=>[x0+p.y*s, gy-p.z*s]; FV={S,s,x0,gy};
+  line(c,[0,gy],[w,gy],ink2,1.5); text(c,'ground',8,gy+16,ink2);
+  c.save();c.setLineDash([2,4]);c.strokeStyle=rule;c.beginPath();c.moveTo(x0,0);c.lineTo(x0,h);c.stroke();c.restore();text(c,'CL',x0+4,14,ink2);
+  // tire
+  const t0=S(V(0,P.WC.y-100,2*r)), t1=S(V(0,P.WC.y+100,0));c.fillStyle=tire;c.globalAlpha=.85;c.fillRect(t0[0],t0[1],t1[0]-t0[0],t1[1]-t0[1]);c.globalAlpha=1;
+  // arms
+  const avg=(a,b)=>a&&b?mul(add(a,b),.5):null, li=avg(P.LCA_F,P.LCA_R), ui=avg(P.UCA_F,P.UCA_R);
+  if(li)line(c,S(li),S(P.LBJ),ink2,3); if(ui)line(c,S(ui),S(P.UBJ),ink2,3);
+  if(li)dotp(c,S(li),3.5,ink); if(ui)dotp(c,S(ui),3.5,ink);
+  // kingpin axis to ground
+  const g=geometry(P), top=add(P.UBJ,mul(unit(sub(P.UBJ,P.LBJ)),60));
+  line(c,S(g.G),S(top),acc,1.5,[7,4]); dotp(c,S(P.LBJ),4.5,ink); dotp(c,S(P.UBJ),4.5,ink);
+  // scrub dimension
+  const a=S(g.G),b=S(P.CP); line(c,[a[0],gy+8],[b[0],gy+8],g.scrub>=0?ideal:warn,2);
+  text(c,`scrub ${g.scrub.toFixed(1)} mm`,(a[0]+b[0])/2,gy+22,ink,'center');
+  text(c,`KPI ${g.kpi.toFixed(1)}°`,S(P.UBJ)[0]-10,S(P.UBJ)[1]-10,acc,'right');
+  // baseline ghost
+  if(base_)line(c,S(base_.ITR),S(base_.OTR),basec,1.2,[4,3]);
+  // tie rod
+  line(c,S(P.ITR),S(P.OTR),acc,3); dotp(c,S(P.ITR),5.5,acc,css('--sheet')); dotp(c,S(P.OTR),5.5,acc,css('--sheet'));
+  text(c,'ITR',S(P.ITR)[0],S(P.ITR)[1]-10,ink,'center'); text(c,'OTR',S(P.OTR)[0],S(P.OTR)[1]-10,ink,'center');
+  dotp(c,S(P.WC),3,css('--sheet'),ink);
+}
+
+function chart(cv,opts){
+  const [c,w,h]=prep(cv), ink2=css('--ink-2'),rule=css('--rule'),ink=css('--ink');
+  const m={l:46,r:14,t:14,b:36}, W=w-m.l-m.r, H=h-m.t-m.b;
+  const X=v=>m.l+(v-opts.x0)/(opts.x1-opts.x0)*W, Y=v=>m.t+H-(v-opts.y0)/(opts.y1-opts.y0)*H;
+  c.font='400 10.5px "IBM Plex Mono",monospace';
+  for(let v=opts.x0;v<=opts.x1+1e-9;v+=opts.xs){c.strokeStyle=rule;c.globalAlpha=.6;c.beginPath();c.moveTo(X(v),m.t);c.lineTo(X(v),m.t+H);c.stroke();c.globalAlpha=1;c.fillStyle=ink2;c.textAlign='center';c.fillText(+v.toFixed(3),X(v),m.t+H+14);}
+  for(let v=opts.y0;v<=opts.y1+1e-9;v+=opts.ys){c.strokeStyle=rule;c.globalAlpha=.6;c.beginPath();c.moveTo(m.l,Y(v));c.lineTo(m.l+W,Y(v));c.stroke();c.globalAlpha=1;c.fillStyle=ink2;c.textAlign='right';c.fillText(+v.toFixed(3),m.l-6,Y(v)+3.5);}
+  c.strokeStyle=ink;c.lineWidth=1;c.strokeRect(m.l,m.t,W,H);
+  c.fillStyle=ink2;c.textAlign='center';c.fillText(opts.xl,m.l+W/2,h-6);
+  c.save();c.translate(11,m.t+H/2);c.rotate(-Math.PI/2);c.fillText(opts.yl,0,0);c.restore();
+  c.save();c.beginPath();c.rect(m.l,m.t,W,H);c.clip();
+  opts.series.forEach(sr=>{if(!sr.pts||sr.pts.length<2)return;c.strokeStyle=sr.col;c.lineWidth=sr.w||2;c.setLineDash(sr.dash||[]);c.beginPath();
+    sr.pts.forEach((p,i)=>i?c.lineTo(X(p[0]),Y(p[1])):c.moveTo(X(p[0]),Y(p[1])));c.stroke();
+    if(sr.end){const p=sr.pts[sr.pts.length-1];c.setLineDash([]);dotp(c,[X(p[0]),Y(p[1])],4,sr.col);}});
+  c.restore();
+  if(opts.note){c.fillStyle=ink2;c.textAlign='left';c.fillText(opts.note,m.l+8,m.t+16);}
+}
+function drawCharts(){
+  const acc=css('--accent'),bc=css('--base'),ideal=css('--ideal'),rule=css('--rule');
+  const all=[...A.ack.pts,...Bs.ack.pts]; const mx=Math.max(10,Math.ceil(Math.max(...all.map(p=>p.di),0)/5)*5);
+  chart($('ackChart'),{x0:0,x1:mx,y0:0,y1:mx,xs:5,ys:5,xl:'inner wheel angle (°)',yl:'outer wheel angle (°)',
+    series:[{pts:[[0,0],[mx,mx]],col:rule,w:1.5,dash:[2,4]},
+      {pts:A.ack.pts.map(p=>[p.di,p.ideal]),col:ideal,w:1.5,dash:[6,4]},
+      {pts:Bs.ack.pts.map(p=>[p.di,p.do]),col:bc,w:1.5,dash:[5,3]},
+      {pts:A.ack.pts.map(p=>[p.di,p.do]),col:acc,w:2.5,end:true}],
+    note:A.ack.lock?`at lock: ${A.ack.lock.ack.toFixed(0)}% Ackermann`:''});
+  if(!A.bump){chart($('bumpChart'),{x0:-1,x1:1,y0:-30,y1:30,xs:.5,ys:10,xl:'toe change (°, + = toe-in)',yl:'wheel travel (mm, + = bump)',series:[],note:'Add LCA_F, LCA_R, UCA_F, UCA_R to compute'});return;}
+  const tmax=Math.max(.25,...A.bump.pts.map(p=>Math.abs(p.toe)),...(Bs.bump?Bs.bump.pts.map(p=>Math.abs(p.toe)):[]));
+  const lim=tmax<=.25?.25:tmax<=.5?.5:tmax<=1?1:Math.ceil(tmax);
+  chart($('bumpChart'),{x0:-lim,x1:lim,y0:-30,y1:30,xs:lim/2,ys:10,xl:'toe change (°, + = toe-in)',yl:'wheel travel (mm, + = bump)',
+    series:[{pts:[[0,-30],[0,30]],col:rule,w:1,dash:[2,4]},
+      Bs.bump?{pts:Bs.bump.pts.map(p=>[p.toe,p.dz]),col:bc,w:1.5,dash:[5,3]}:{},
+      {pts:A.bump.pts.map(p=>[p.toe,p.dz]),col:acc,w:2.5}],
+    note:`${A.bump.rate.toFixed(3)}°/25mm toe · ${A.bump.camber.toFixed(2)}°/25mm camber`});
+}
+
+function update(syncInputs=true){
+  const wb=+$('wb').value||1550, travel=Math.max(1,+$('travel').value||30);
+  A=analyze(cur,wb,travel); Bs=analyze(base,wb,travel); base_=base;
+  const u=+$('steer').value/100*travel;
+  $('steerOut').textContent=(u>=0?'+':'')+u.toFixed(1)+' mm';
+  renderMetrics(A,Bs); drawTop(); drawFront(); drawCharts(); if(syncInputs)syncTable(); else syncTable();
+}
+
+/* ---------- dragging ---------- */
+function pick(cv,e){const r=cv.getBoundingClientRect();return [e.clientX-r.left,e.clientY-r.top];}
+function hookDrag(cv,which){
+  cv.addEventListener('pointerdown',e=>{
+    const p=pick(cv,e);
+    if(which==='top'){ if(+$('steer').value!==0){$('steer').value=0;update();}
+      for(const k of ['OTR','ITR']){const q=TV.S(cur[k]);if(Math.hypot(q[0]-p[0],q[1]-p[1])<14){drag={cv:which,k};cv.setPointerCapture(e.pointerId);return;}}}
+    else {for(const k of ['OTR','ITR']){const q=FV.S(cur[k]);if(Math.hypot(q[0]-p[0],q[1]-p[1])<14){drag={cv:which,k};cv.setPointerCapture(e.pointerId);return;}}}
+  });
+  cv.addEventListener('pointermove',e=>{
+    const p=pick(cv,e);
+    if(!drag){let over=false;const T=which==='top'?TV:FV;if(T)['OTR','ITR'].forEach(k=>{const q=T.S(cur[k]);if(Math.hypot(q[0]-p[0],q[1]-p[1])<14)over=true;});cv.style.cursor=over?'grab':'default';return;}
+    const k=drag.k;
+    if(which==='top'){cur[k].y=Math.round(((TV.cx-p[0])/TV.s)*2)/2;cur[k].x=Math.round(((TV.fy-p[1])/TV.s+TV.X0)*2)/2;}
+    else {cur[k].y=Math.round(((p[0]-FV.x0)/FV.s)*2)/2;cur[k].z=Math.round(((FV.gy-p[1])/FV.s)*2)/2;}
+    update();
+  });
+  const end=()=>{drag=null;};cv.addEventListener('pointerup',end);cv.addEventListener('pointercancel',end);
+}
+
+/* ---------- wiring ---------- */
+$('file').addEventListener('change',e=>{const f=e.target.files[0];if(!f)return;f.text().then(t=>load(t,f.name));e.target.value='';});
+$('loadSample').addEventListener('click',()=>{load(SAMPLE,'sample_hardpoints.csv');});
+$('reset').addEventListener('click',()=>{if(!base)return;cur=clone(base);update();setStatus('Reset to the imported baseline.');});
+$('rebase').addEventListener('click',()=>{if(!cur)return;base=clone(cur);buildTable();update();setStatus('Current geometry is now the baseline.');});
+$('reimport').addEventListener('click',()=>{if(lastText)load(lastText,lastName);});
+['axF','axU'].forEach(id=>$(id).addEventListener('change',()=>{load.userAxes=true;}));
+['wb','travel'].forEach(id=>$(id).addEventListener('input',()=>cur&&update()));
+$('steer').addEventListener('input',()=>cur&&update());
+$('export').addEventListener('click',()=>{
+  const rows=['# Exported from Steering Sandbox (mm, +X fwd, +Y left, +Z up)','name,x_mm,y_mm,z_mm'];
+  KEYS.forEach(([k])=>{if(cur[k])rows.push([k,cur[k].x,cur[k].y,cur[k].z].join(','));});rows.push('wheelbase,'+$('wb').value+',,');
+  const blob=new Blob([rows.join('\n')+'\n'],{type:'text/csv'}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='steering_sandbox_hardpoints.csv';document.body.appendChild(a);a.click();a.remove();
+  setStatus('Downloaded steering_sandbox_hardpoints.csv with your current geometry.');
+});
+// drag & drop files
+let dragDepth=0;
+addEventListener('dragenter',e=>{if(e.dataTransfer&&[...e.dataTransfer.types].includes('Files')){dragDepth++;$('drop').hidden=false;}});
+addEventListener('dragleave',()=>{dragDepth=Math.max(0,dragDepth-1);if(!dragDepth)$('drop').hidden=true;});
+addEventListener('dragover',e=>e.preventDefault());
+addEventListener('drop',e=>{e.preventDefault();dragDepth=0;$('drop').hidden=true;const f=e.dataTransfer.files[0];if(f)f.text().then(t=>load(t,f.name));});
+hookDrag($('top'),'top');hookDrag($('front'),'front');
+addEventListener('resize',()=>cur&&update());
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change',()=>cur&&update());
+load(SAMPLE,'sample_hardpoints.csv');
+if(document.fonts)document.fonts.ready.then(()=>cur&&update());
+})();
+</script>
+</body>
+</html>
