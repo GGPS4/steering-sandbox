@@ -172,6 +172,16 @@ footer{font:400 12px var(--mono);color:var(--ink-2);display:flex;justify-content
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .pill.mid,:root:not([data-theme="light"]) .kvr b.mid{color:#F2B233}}
 :root[data-theme="dark"] .pill.mid,:root[data-theme="dark"] .kvr b.mid{color:#F2B233}
 @media (max-width:760px){.effort-grid{grid-template-columns:1fr}.et + .et{border-left:0;border-top:1px solid var(--rule)}}
+
+/* team package, TTC tyre model, rocker & coilover (js/*.js, docs/*.md) */
+.src{display:block;font:400 10.5px/1.35 var(--mono);color:var(--ink-2);letter-spacing:0;text-transform:none}
+.src.pkg{color:var(--accent)} .src.warn{color:var(--warn)}
+.note{font:400 12.5px/1.55 var(--body);color:var(--ink-2);padding:10px 14px;margin:0;border-top:1px solid var(--rule)}
+.note b{color:var(--ink);font-weight:600}
+.placeholder{padding:18px 14px;color:var(--ink-2);font-size:14px}
+#rkDraw,#ttcChart,#ttcPress,#rkMR,#rkKw{aspect-ratio:16/10}
+table.mini{min-width:0;font-size:12.5px} table.mini td,table.mini th{padding:4px 8px} table.mini td{font:400 12.5px var(--mono);white-space:nowrap}
+table.mini td.txt{font:400 12.5px var(--body);white-space:normal}
 </style>
 </head>
 <body>
@@ -189,11 +199,13 @@ footer{font:400 12px var(--mono);color:var(--ink-2);display:flex;justify-content
       <button class="btn" id="reset" type="button">Reset to baseline</button>
       <button class="btn" id="rebase" type="button">Set current as baseline</button>
       <button class="btn" id="export" type="button">Download CSV</button>
+      <label class="btn" for="pkgFile" title="bfsae_sandbox_package.json from MATLAB sandbox_export.m (team drive; see docs/TEAM_PACKAGE.md)">Load team package</label>
+      <input id="pkgFile" class="sr" type="file" accept=".json">
     </div>
   </header>
 
   <nav class="subnav" aria-label="Tools">
-    <a href="#top-view">Steering geometry</a><a href="#tires">Tire curves</a><a href="#vehicle">Vehicle</a><a href="#rollcenter">Roll center &amp; anti</a><a href="#ratio">Steering ratio &amp; U-joints</a><a href="#loads">Load transfer</a><a href="#effort">Steering effort</a><a href="#hardpoints">Hardpoints</a><a href="#fusion">Fusion import</a>
+    <a href="#top-view">Steering geometry</a><a href="#tires">Tire curves</a><a href="#ttc">TTC tyre model</a><a href="#vehicle">Vehicle</a><a href="#rocker">Rocker &amp; coilover</a><a href="#rollcenter">Roll center &amp; anti</a><a href="#ratio">Steering ratio &amp; U-joints</a><a href="#loads">Load transfer</a><a href="#effort">Steering effort</a><a href="#hardpoints">Hardpoints</a><a href="#package">Team package &amp; data sources</a><a href="#fusion">Fusion import</a>
   </nav>
 
   <div id="status" role="status">Loading sample car…</div>
@@ -239,7 +251,7 @@ footer{font:400 12px var(--mono);color:var(--ink-2);display:flex;justify-content
   </div>
 
   <div class="panel" id="tires">
-    <div class="panel-h"><h2>Tire curve fitter</h2><span class="hint">Fits the Pacejka Magic Formula to lateral force vs slip angle, one curve per normal load.</span></div>
+    <div class="panel-h"><h2>Tire curve fitter · quick fit of your own data</h2><span class="hint">Fits a simple Magic Formula (B, C, D, E, S<sub>h</sub>, S<sub>v</sub>) to lateral force vs slip angle, separately for each normal load. For the team's reference tyre (pressure, camber and load in one fitted model) use the TTC tyre model panel below.</span></div>
     <div class="tire">
       <div>
         <canvas id="tireChart" aria-label="Lateral force versus slip angle with fitted Magic Formula curves per normal load"></canvas>
@@ -256,8 +268,14 @@ footer{font:400 12px var(--mono);color:var(--ink-2);display:flex;justify-content
         <div class="formula">F<sub>y</sub> = D·sin(C·atan(Bx − E(Bx − atan Bx))) + S<sub>v</sub>, &nbsp;x = α + S<sub>h</sub></div>
         <div class="tbl-wrap" id="tireTable"></div>
         <p class="hint" style="margin:0">CSV columns: slip angle (SA, deg or rad), lateral force (FY), and optionally normal load (FZ). TTC-style exports work. Loads are grouped automatically. C<sub>α</sub> = B·C·D is the cornering stiffness at zero slip. μ<sub>peak</sub> = |D| / F<sub>z</sub>.</p>
+        <p class="hint" style="margin:0"><b>How this differs from the team model:</b> each load gets its own independent curve, and camber, pressure and aligning moment are ignored. Pressure and camber must be held constant within a file, or the fit mixes them. The sample tyre is synthetic. Use this to look at a new data set quickly; use the TTC model below for design numbers. See docs/TYRE_MODEL.md.</p>
       </div>
     </div>
+  </div>
+
+  <div class="panel" id="ttc">
+    <div class="panel-h"><h2>TTC tyre model · team reference tyre</h2><span class="hint">Hoosier 18.0×6.0-10 R20 fitted in MATLAB to TTC Round 9 data: one Magic Formula model with load, camber and pressure terms, plus aligning moment and a loaded-radius fit.</span></div>
+    <div id="ttcBody"><p class="placeholder">Load the team package (<b>Load team package</b>, top right) to use the fitted TTC model. Its coefficients are not stored on this public site because TTC data-use terms restrict sharing the data outside member teams. See docs/TEAM_PACKAGE.md.</p></div>
   </div>
 
   <div class="panel" id="vehicle">
@@ -268,6 +286,12 @@ footer{font:400 12px var(--mono);color:var(--ink-2);display:flex;justify-content
       <button class="btn" id="resetEV2" type="button">Reset to EV2 values</button>
       <span class="hint">Source: <a href="https://docs.google.com/spreadsheets/d/1xbYSih7mtJYHMdyTQ5hdRJBR325y-rxVZeezf-8Pny8/edit" target="_blank" rel="noopener">EV2 Vehicle Dynamics Calcs</a> (Motorsports shared drive). Total roll stiffness is from the 2020 team steering code, so replace it with yours.</span>
     </div>
+    <p class="note">The small line under each value says where it came from. Loading the team package replaces the EV2 sheet values with the 2026 car's measured, CAD or fitted values and marks each one. Every parameter, with its meaning and how to update it, is in docs/DATA_DICTIONARY.md.</p>
+  </div>
+
+  <div class="panel" id="rocker">
+    <div class="panel-h"><h2>Rocker &amp; coilover</h2><span class="hint">Pushrod–rocker–coilover linkage of the chosen front/rear pair: motion ratio, wheel rate, collar setting, usable travel, damping and joint loads. Edit rocker points to see the effect live.</span></div>
+    <div id="rkBody"><p class="placeholder">Load the team package (<b>Load team package</b>, top right) to use this panel. It needs the rocker lab's pair geometry and the pushrod's path over wheel travel, exported from MATLAB by <code>sandbox_export</code>. See docs/ROCKER_COILOVER.md.</p></div>
   </div>
 
   <div class="panel" id="rollcenter">
@@ -344,6 +368,11 @@ footer{font:400 12px var(--mono);color:var(--ink-2);display:flex;justify-content
       <label><span class="label">Import units</span><select id="units"><option value="auto">Auto</option><option value="mm">mm</option><option value="cm">cm</option><option value="in">in</option></select></label>
       <button class="btn" id="reimport" type="button">Re-read last file</button>
     </div>
+  </div>
+
+  <div class="panel" id="package">
+    <div class="panel-h"><h2>Team package &amp; data sources</h2><span class="hint">Where every number on this page comes from, and how to change it.</span></div>
+    <div id="pkgBody"><p class="placeholder">No team package loaded: the page is showing the sample car and the EV2 2025–26 sheet values. The team package is <code>bfsae_sandbox_package.json</code>, written in MATLAB by <code>sandbox_export</code> (see docs/TEAM_PACKAGE.md). It is kept on the team drive, not in this repository.</p></div>
   </div>
 
   <div class="panel" id="fusion">
@@ -570,7 +599,7 @@ function bump(P){
   return {pts,rate:(up.toe-dn.toe)/((up.dz-dn.dz)/25),camber:(up.camber-dn.camber)/((up.dz-dn.dz)/25)};
 }
 function analyze(P,wb,travel){const geo=geometry(P);return {geo,ack:ackermann(P,wb,travel),bump:bump(P)};}
-window.SS={get cur(){return cur;},get base(){return base;},geometry,steerAt,bumpAt,V,add,sub,mul,dot,cross,len,unit,deg,rad,axisMat,mv,rotAbout,solve,get dir(){return A&&A.ack?A.ack.dir:-1;},listeners:[]};
+window.SS={get cur(){return cur;},get base(){return base;},geometry,steerAt,bumpAt,V,add,sub,mul,dot,cross,len,unit,deg,rad,axisMat,mv,rotAbout,solve,get dir(){return A&&A.ack?A.ack.dir:-1;},listeners:[],loadText:(t,n)=>load(t,n)};
 
 /* ---------- state ---------- */
 let base=null, cur=null, lastText=null, lastName='sample_hardpoints.csv';
@@ -580,6 +609,9 @@ function setStatus(html,err){const s=$('status');s.innerHTML=html;s.classList.to
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 
 function load(text,name){
+  // Team package (MATLAB sandbox_export.m) goes to js/team_package.js, which
+  // sends the steering hardpoints back through this function as plain JSON.
+  try{const d=JSON.parse(text);if(d&&d.format==='bfsae-sandbox-package'&&window.BFSAE_PACKAGE){window.BFSAE_PACKAGE.load(d,name);return;}}catch(e){}
   lastText=text;lastName=name;
   try{
     const parsed=parseFile(text);
@@ -921,19 +953,36 @@ const $=id=>document.getElementById(id);
 const css=n=>getComputedStyle(document.documentElement).getPropertyValue(n).trim();
 const G=9.81;
 
-/* ---------- vehicle parameters (EV2 2025-26 sheet) ---------- */
+/* ---------- vehicle parameters (EV2 2025-26 sheet) ----------
+   [key, label, EV2 value, unit, source shown under the box, what it does (hover)].
+   The team package (js/team_package.js) overwrites values with the 2026 car's
+   and changes the source line. Full list: docs/DATA_DICTIONARY.md. */
 const EV2=[
-  ['m','Total mass (car + driver)',328,'kg'],['wdf','Front weight fraction',0.45,''],
-  ['L','Wheelbase',1554.2,'mm'],['tf','Front track',1330,'mm'],['tr','Rear track',1330,'mm'],
-  ['h','CG height',343,'mm'],['zrf','Front roll center height',70.7,'mm'],['zrr','Rear roll center height',81.3,'mm'],
-  ['muf','Front unsprung mass (axle)',18.14,'kg'],['mur','Rear unsprung mass (axle)',22.675,'kg'],
-  ['kfrac','Front roll stiffness share',0.45,''],['ktot','Total roll stiffness',1138,'N·m/°'],
-  ['rw','Loaded tire radius',229,'mm'],['tm','Combined motor torque',650,'N·m'],
-  ['tb','Combined brake torque',1700,'N·m'],['tbf','Front brake torque',1020,'N·m'],['adT','Anti-dive target',85,'%']];
+  ['m','Total mass (car + driver)',328,'kg','EV2 sheet','Car plus driver. Scales every load, the roll moment and the accel/decel limits.'],
+  ['wdf','Front weight fraction',0.45,'','EV2 sheet','Static front axle load / total. Corner-weigh the car to measure it.'],
+  ['L','Wheelbase',1554.2,'mm','EV2 sheet','Front to rear wheel centres. Sets longitudinal load transfer and Ackermann targets.'],
+  ['tf','Front track',1330,'mm','EV2 sheet','Distance between front wheel centres. Sets front lateral load transfer and roll stiffness from springs.'],
+  ['tr','Rear track',1330,'mm','EV2 sheet','Distance between rear wheel centres.'],
+  ['h','CG height',343,'mm','EV2 sheet (last year\'s car)','Height of the whole-car centre of gravity above the road. Drives all load transfer. Measure it (tilt test) or take it from CAD with the driver.'],
+  ['zrf','Front roll center height',70.7,'mm','EV2 sheet; hardpoint value used when ticked below','Height of the front roll centre above the road. Sets the geometric (non-rolling) share of front load transfer.'],
+  ['zrr','Rear roll center height',81.3,'mm','EV2 sheet','Height of the rear roll centre above the road.'],
+  ['muf','Front unsprung mass (axle)',18.14,'kg','EV2 sheet','Both front corners: wheel, tyre, upright, brakes and half the arms. Weigh the corner assemblies.'],
+  ['mur','Rear unsprung mass (axle)',22.675,'kg','EV2 sheet','Both rear corners.'],
+  ['kfrac','Front roll stiffness share',0.45,'','EV2 sheet','Front roll stiffness / total. Moves elastic load transfer between the axles (balance).'],
+  ['ktot','Total roll stiffness',1138,'N·m/°','2020 team steering code (replace)','Springs, tyres and anti-roll bars of both axles, per degree of body roll. The rocker panel can calculate it from the rocker wheel rates.'],
+  ['rw','Loaded tire radius',229,'mm','EV2 sheet (229 mm is the unloaded radius)','Wheel centre to road under load. Used for unsprung load transfer and wheel torque to force.'],
+  ['tm','Combined motor torque',650,'N·m','EV2 electric car (not the 2026 engine)','Peak torque at the driven wheels (after gearing), both sides together.'],
+  ['tb','Combined brake torque',1700,'N·m','EV2 sheet','Peak brake torque of all four wheels.'],
+  ['tbf','Front brake torque',1020,'N·m','EV2 sheet','Front share of the brake torque; sets brake bias and anti-dive.'],
+  ['adT','Anti-dive target',85,'%','EV2 sheet target','Design target only; the achieved value is calculated from the arm pivots above.']];
 function buildParams(){
-  $('vgrid').innerHTML=EV2.map(([k,l,v,u])=>`<label><span class="label">${l}${u?' ('+u+')':''}</span><input id="vp-${k}" type="number" step="any" value="${v}"></label>`).join('');
+  $('vgrid').innerHTML=EV2.map(([k,l,v,u,src,help])=>`<label title="${help}"><span class="label">${l}${u?' ('+u+')':''}</span><input id="vp-${k}" type="number" step="any" value="${v}"><span class="src" id="vs-${k}">${src}</span></label>`).join('');
   EV2.forEach(([k])=>$('vp-'+k).addEventListener('input',renderAll));
 }
+/* Set one vehicle value from another module (team package, rocker panel) and
+   record its source under the box. cls: 'pkg' (package) or 'warn'. */
+function setParam(k,v,src,cls){const el=$('vp-'+k),s=$('vs-'+k);if(!el)return;el.value=+(+v).toPrecision(6);
+  if(s){s.textContent=src;s.className='src'+(cls?' '+cls:'');}}
 const P_=k=>{const v=parseFloat($('vp-'+k).value);return isFinite(v)?v:EV2.find(e=>e[0]===k)[2];};
 function veh(){return {m:P_('m'),wdf:P_('wdf'),L:P_('L')/1000,tf:P_('tf')/1000,tr:P_('tr')/1000,h:P_('h')/1000,zrf:P_('zrf')/1000,zrr:P_('zrr')/1000,
   muf:P_('muf'),mur:P_('mur'),kfrac:P_('kfrac'),ktot:P_('ktot'),rw:P_('rw')/1000,tm:P_('tm'),tb:P_('tb'),tbf:P_('tbf'),adT:P_('adT')};}
@@ -1149,16 +1198,24 @@ function renderEffort(M){
 
 function renderAll(){if(!S.cur)return;renderRC();const M=renderRatio();renderLoads();renderEffort(M);}
 buildParams();
-$('resetEV2').addEventListener('click',()=>{EV2.forEach(([k,,v])=>$('vp-'+k).value=v);renderAll();});
+$('resetEV2').addEventListener('click',()=>{EV2.forEach(([k,,v,,src])=>setParam(k,v,src));renderAll();});
 ['useHpRC','cfac','uj1','uj2','ujPlane','ujPhase','swDia','tread','muS','ptrail','skidR','fric'].forEach(id=>$(id).addEventListener('input',renderAll));
 ['ay','ax'].forEach(id=>$(id).addEventListener('input',()=>{renderLoads();renderEffort();}));
 document.querySelectorAll('#loads [data-p]').forEach(b=>b.addEventListener('click',()=>{let [a,x]=b.dataset.p.split(',');const v=veh();if(x==='acc')x=Math.min(1.5,(v.tm/v.rw)/(v.m*G));$('ay').value=a;$('ax').value=x;renderLoads();renderEffort();}));
 S.listeners.push(renderAll);
 addEventListener('resize',renderAll);
+// Shared with js/ttc_panel.js, js/rocker_panel.js and js/team_package.js.
+Object.assign(S,{chart,prep,kv,range,niceStep,ln,dt,tx,css,veh,loads,renderAll,setParam,EV2});
 renderAll();
 if(document.fonts)document.fonts.ready.then(renderAll);
 })();
 
 </script>
+<!-- Team additions: TTC tyre model, rocker & coilover, team package (docs/*.md) -->
+<script src="js/ttc_tyre.js"></script>
+<script src="js/rocker_model.js"></script>
+<script src="js/ttc_panel.js"></script>
+<script src="js/rocker_panel.js"></script>
+<script src="js/team_package.js"></script>
 </body>
 </html>
