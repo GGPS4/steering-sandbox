@@ -140,7 +140,8 @@ Editable inputs are described in ROCKER_COILOVER.md. Fixed package values
 | Damper | Platinum 4, split valving 5-3 | same | | Digitized dyno sheet (MATLAB `data/damper`). + velocity = compression. Measured to 10 in/s, extrapolated beyond with a band. |
 | Damping guidance | body 0.5–0.8, hop 0.2–0.5 | | ζ | Common design guidance, not a rule |
 | Tyre-rate band | 85.4 / 113.8 / 142.3 | | N/mm | TTC vertical rate ±25% (MATLAB damping review) |
-| Hole diameters (pivot / pushrod / shock / ARB) | 12 / 9.53 / 7.94 / 9.53 | | mm | For bearing load per mm of plate (`rocker_lab_inputs`) |
+| Hole diameters (pivot / pushrod / shock / ARB) | 12 / 9.53 / 7.94 / 9.53 | | mm | For bearing load per mm of plate (`rocker_lab_inputs`); drawn at true size |
+| Plate edge margin | 10 | 10 | mm | Minimum material around each joint centre; sets the closed convex plate outline (`rocker_development_inputs` `layout.outlineMargin_mm`) |
 
 **To change any of these,** edit the MATLAB input named in the source column, re-run
 the MATLAB step that uses it (`rocker_lab`, `front_steering_envelope`, damping or

@@ -280,6 +280,36 @@ function envelope(rows) {
     shockHole: mx(rows, r => r.shockHoleMax), pushrodMaxCompression: mx(rows, r => r.pushrodHigh), pushrodMin: Math.min(...rows.map(r => r.pushrodLow)) };
 }
 
+/* Rocker plate outline — rocker_development_outline.m. The rocker is a closed,
+ * convex plate: the convex hull of 24-sided circles of radius margin/cos(pi/24)
+ * (so each joint keeps at least `margin` of material) around the pivot, pushrod,
+ * shock and ARB joint centres, in the rocker plane. This is the same outline the
+ * rocker lab uses for packaging, collision checks and the CAD export.
+ * Returns 3D points at the CAD pose, in order around the plate. */
+function planeBasis(a) { // e1 = lateral (+y) in the plane, e2 = upward in the plane
+  const yv = [0, 1, 0], d = dot(a, yv), e1 = unit(sub(yv, mul(a, d)));
+  let e2 = cross(a, e1); if (e2[2] < 0) e2 = mul(e2, -1);
+  return [e1, e2];
+}
+function hull2(pts) { // Andrew's monotone chain; drops collinear points like MATLAB convhull
+  const p = pts.slice().sort((A, B) => A[0] - B[0] || A[1] - B[1]);
+  const turn = (o, A, B) => (A[0] - o[0]) * (B[1] - o[1]) - (A[1] - o[1]) * (B[0] - o[0]);
+  const lo = [], up = [];
+  for (const q of p) { while (lo.length > 1 && turn(lo[lo.length - 2], lo[lo.length - 1], q) <= 1e-12) lo.pop(); lo.push(q); }
+  for (const q of p.reverse()) { while (up.length > 1 && turn(up[up.length - 2], up[up.length - 1], q) <= 1e-12) up.pop(); up.push(q); }
+  return lo.slice(0, -1).concat(up.slice(0, -1));
+}
+function outline(geo, margin) {
+  const a = unit(geo.pivotAxis), O = geo.pivot, [e1, e2] = planeBasis(a), r = margin / Math.cos(Math.PI / 24), cloud = [];
+  for (const c of [geo.pivot, geo.pushrodRocker, geo.shockRocker, geo.arbRocker]) {
+    const u = dot(sub(c, O), e1), v = dot(sub(c, O), e2);
+    for (let k = 0; k < 24; k++) { const t = k * 2 * Math.PI / 24; cloud.push([u + r * Math.cos(t), v + r * Math.sin(t)]); }
+  }
+  return hull2(cloud).map(([u, v]) => add(O, add(mul(e1, u), mul(e2, v))));
+}
+/* The plate at wheel-travel index j: the CAD outline turned by the rocker angle there. */
+function outlineAt(L, geo, plate, j) { return plate.map(p => rotate(p, geo.pivot, L.a, L.gamma[j])); }
+
 /* Roll stiffness of one axle (N m/deg): wheel rate and tyre in series, times
  * track^2 / 2, plus any anti-roll bar. The same springs-only formula as the
  * MATLAB steering envelope's lateral-transfer model. */
@@ -288,5 +318,6 @@ function rollStiffness(kwNmm, ktNmm, trackMm, arbNmDeg) {
   return kr * t * t / 2 * Math.PI / 180 + (arbNmDeg || 0);
 }
 
-window.BFSAE_ROCKER_MODEL = { solveLinkage, coilover, damperForce, ceq, damping, loadCases, envelope, rollStiffness, statics, closeCircle };
+window.BFSAE_ROCKER_MODEL = { solveLinkage, coilover, damperForce, ceq, damping, loadCases, envelope, rollStiffness, statics, closeCircle,
+  outline, outlineAt, planeBasis, rotate };
 })();

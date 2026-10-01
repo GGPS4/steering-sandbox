@@ -145,24 +145,34 @@ function draw(r) {
   const a = L.a, yv = [0, 1, 0], u1 = (() => { const d = a[0] * yv[0] + a[1] * yv[1] + a[2] * yv[2]; const v = [yv[0] - d * a[0], yv[1] - d * a[1], yv[2] - d * a[2]]; const n = Math.hypot(...v); return v.map(x => x / n); })();
   let u2 = [a[1] * u1[2] - a[2] * u1[1], a[2] * u1[0] - a[0] * u1[2], a[0] * u1[1] - a[1] * u1[0]]; if (u2[2] < 0) u2 = u2.map(x => -x);
   const O = g.pivot, pr = p => [(p[0] - O[0]) * u1[0] + (p[1] - O[1]) * u1[1] + (p[2] - O[2]) * u1[2], (p[0] - O[0]) * u2[0] + (p[1] - O[1]) * u2[1] + (p[2] - O[2]) * u2[2]];
+  // Closed rocker plate (rocker_development_outline.m), turned by the rocker angle at each pose.
+  const plate = M.outline(g, g.outlineMargin_mm || 10), holes = pkg.rockerHoles || {};
   const poses = [[C.r, S.css('--accent'), 2.5, null, 'ride']];
   if (C.nominal && C.nominal.ok) poses.push([C.nominal.hi, S.css('--ideal'), 1.5, [5, 3], 'bump end'], [C.nominal.lo, S.css('--warn'), 1.5, [5, 3], 'droop end']);
-  const pts = [pr(g.shockChassis), [0, 0]]; poses.forEach(([j]) => { pts.push(pr(L.G[j]), pr(L.H[j]), pr(L.Q[j])); });
-  const xs = pts.map(p => p[0]), ys = pts.map(p => p[1]), pad = 30;
+  const shapes = poses.map(([j]) => M.outlineAt(L, g, plate, j).map(pr));
+  const pts = [pr(g.shockChassis), [0, 0], ...shapes.flat()];
+  const xs = pts.map(p => p[0]), ys = pts.map(p => p[1]), pad = 25;
   const x0 = Math.min(...xs) - pad, x1 = Math.max(...xs) + pad, y0 = Math.min(...ys) - pad, y1 = Math.max(...ys) + pad, s = Math.min((w - 20) / (x1 - x0), (h - 30) / (y1 - y0));
   const T = p => [10 + (p[0] - x0) * s, h - 20 - (p[1] - y0) * s];
-  const ink = S.css('--ink'), ink2 = S.css('--ink-2');
-  poses.forEach(([j, col, lw, dash, label]) => {
-    const G = T(pr(L.G[j])), H = T(pr(L.H[j])), Q = T(pr(L.Q[j])), O2 = T([0, 0]), P = pr(L.P[j]), Sx = T(pr(g.shockChassis));
-    c.save(); c.globalAlpha = .12; c.fillStyle = col; c.beginPath(); c.moveTo(...O2); c.lineTo(...G); c.lineTo(...H); c.lineTo(...Q); c.closePath(); c.fill(); c.restore();
-    S.ln(c, O2, G, col, lw, dash); S.ln(c, G, H, col, lw, dash); S.ln(c, H, Q, col, lw, dash); S.ln(c, Q, O2, col, lw, dash);
-    S.ln(c, H, Sx, col, lw * 0.8, [2, 3]); // shock
-    const dir = [P[0] - pr(L.G[j])[0], P[1] - pr(L.G[j])[1]], n = Math.hypot(...dir) || 1, Pe = T([pr(L.G[j])[0] + dir[0] / n * 60, pr(L.G[j])[1] + dir[1] / n * 60]);
-    S.ln(c, G, Pe, col, lw * 0.8, [1, 3]); // pushrod direction (first 60 mm)
-    S.dt(c, G, 3.5, col); S.dt(c, H, 3.5, col); S.dt(c, Q, 2.5, col);
+  const ink = S.css('--ink'), ink2 = S.css('--ink-2'), sheet = S.css('--sheet');
+  const hole = (p, dia, col, lw, dash) => { const q = T(p); c.save(); c.beginPath(); c.arc(q[0], q[1], Math.max(1.5, dia / 2 * s), 0, 2 * Math.PI); c.fillStyle = sheet; c.fill();
+    c.strokeStyle = col; c.lineWidth = lw; if (dash) c.setLineDash(dash); c.stroke(); c.restore(); };
+  // Bump and droop ends first (dashed), ride on top (solid)
+  poses.map((p, k) => [p, shapes[k]]).reverse().forEach(([[j, col, lw, dash], shape]) => {
+    const poly = shape.map(T);
+    c.save(); c.beginPath(); poly.forEach((q, i) => i ? c.lineTo(...q) : c.moveTo(...q)); c.closePath();
+    c.globalAlpha = dash ? .06 : .16; c.fillStyle = col; c.fill(); c.globalAlpha = 1; c.strokeStyle = col; c.lineWidth = lw; if (dash) c.setLineDash(dash); c.stroke(); c.restore();
+    const G = pr(L.G[j]), H = pr(L.H[j]), Q = pr(L.Q[j]), P = pr(L.P[j]);
+    S.ln(c, T(H), T(pr(g.shockChassis)), col, lw * 0.8, [2, 3]); // shock: rocker eye to chassis eye
+    const dir = [P[0] - G[0], P[1] - G[1]], n = Math.hypot(...dir) || 1;
+    S.ln(c, T(G), T([G[0] + dir[0] / n * 70, G[1] + dir[1] / n * 70]), col, lw * 0.8, [1, 3]); // pushrod (first 70 mm, toward the lower arm)
+    hole(G, holes.pushrodDiameter_mm || 9.5, col, lw * 0.6, dash); hole(H, holes.shockDiameter_mm || 8, col, lw * 0.6, dash); hole(Q, holes.arbDiameter_mm || 9.5, col, lw * 0.6, dash);
   });
-  S.dt(c, T([0, 0]), 5, S.css('--sheet'), ink); S.dt(c, T(pr(g.shockChassis)), 5, S.css('--sheet'), ink);
-  S.tx(c, 'pivot', T([0, 0])[0] + 8, T([0, 0])[1] - 8, ink2); S.tx(c, 'shock chassis eye', T(pr(g.shockChassis))[0] + 8, T(pr(g.shockChassis))[1] - 8, ink2);
+  hole([0, 0], holes.pivotDiameter_mm || 12, ink, 1.5); S.dt(c, T(pr(g.shockChassis)), 5, sheet, ink);
+  const lbl = (txt, p, dx, dy) => { const q = T(p), right = q[0] + dx + 7 * txt.length > w; // flip labels that would run off the edge
+    S.tx(c, txt, right ? q[0] - Math.abs(dx) : q[0] + dx, q[1] + dy, ink2, right ? 'right' : 'left'); };
+  const r0 = C.r; lbl('pivot', [0, 0], 10, 16); lbl('pushrod', pr(L.G[r0]), 8, -8); lbl('shock', pr(L.H[r0]), 8, -8); lbl('ARB', pr(L.Q[r0]), 8, 14);
+  lbl('shock chassis eye', pr(g.shockChassis), 8, -8);
   S.tx(c, 'Rocker plane · ride solid · usable bump/droop ends dashed', 10, 14, ink2);
   S.tx(c, '→ outboard (+y)   ↑ up', 10, h - 4, ink2);
 }
@@ -184,6 +194,12 @@ function check(r, i) { // this page vs MATLAB (only meaningful for unedited geom
   const rows = [['Motion ratio / shock length', `max |Δ| ${dMR.toExponential(1)} / ${dL.toExponential(1)} mm`, dMR < 1e-4 && dL < 1e-3 ? 'ok' : 'hi'],
     ['Wheel rate at ride', `${f3(r.C.kwRide)} vs MATLAB ${f3(R.wheelRateAtRide_N_mm)} N/mm`, Math.abs(r.C.kwRide - R.wheelRateAtRide_N_mm) < 0.01 ? 'ok' : 'hi'],
     ['Bump / droop', `${f2(r.C.bump)} / ${f2(r.C.droop)} vs MATLAB ${f2(R.bump_mm)} / ${f2(R.droop_mm)} mm`, Math.abs(r.C.bump - R.bump_mm) < 0.3 && Math.abs(r.C.droop - R.droop_mm) < 0.3 ? 'ok' : 'hi']];
+  if (A.geometry.outlineCAD) { // plate outline: this page's convex hull vs MATLAB rocker_development_outline
+    const js = M.outline(geo[i], geo[i].outlineMargin_mm || 10), ml = A.geometry.outlineCAD;
+    const gap = (p, set) => Math.min(...set.map(q => Math.hypot(p[0] - q[0], p[1] - q[1], p[2] - q[2])));
+    const dev = Math.max(...js.map(p => gap(p, ml)), ...ml.map(p => gap(p, js)));
+    rows.push(['Rocker plate outline', `${js.length} vertices · max gap to MATLAB ${dev.toExponential(1)} mm`, dev < 1e-6 ? 'ok' : 'hi']);
+  }
   if (R.damping) rows.push(['Body / hop ζ cycle (kt ' + ktM.toFixed(1) + ')', `${f3(Dm.body_cycle)} / ${f3(Dm.hop_cycle)} vs MATLAB ${f3(R.damping.BodyZetaCycle)} / ${f3(R.damping.HopZetaCycle)}`,
     Math.abs(Dm.body_cycle - R.damping.BodyZetaCycle) < 0.005 && Math.abs(Dm.hop_cycle - R.damping.HopZetaCycle) < 0.005 ? 'ok' : 'hi']);
   if (R.loads && r.env) rows.push(['Pivot max force', `${f0(r.env.pivot)} vs MATLAB ${f0(R.loads.MaxPivotForce_N)} N`, Math.abs(r.env.pivot - R.loads.MaxPivotForce_N) / R.loads.MaxPivotForce_N < 0.01 ? 'ok' : 'hi'],
