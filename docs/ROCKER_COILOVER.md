@@ -76,7 +76,18 @@ are listed in DATA_DICTIONARY.md with their sources.
    - "Band" covers the seat cases and the dyno band. The envelope takes the band
      maximum. "Measured range" excludes extrapolated damper speeds (> 10 in/s) and the
      design case.
-7. **Roll stiffness** (`rollStiffness`): per axle, k_ride·track²/2 (springs and tyre
+7. **Rocker drawing** (`outline` ← `rocker_development_outline.m`)
+   - The rocker is drawn as the **closed convex plate** the rocker lab designs: the
+     convex hull of 24-sided circles of radius margin/cos(π/24) around the pivot,
+     pushrod, shock and ARB joints.
+   - The margin is 10 mm of material around every joint centre
+     (`geometry.outlineMargin_mm`).
+   - The plate is drawn at ride (solid) and at the usable bump and droop ends
+     (dashed), turned by the rocker angle at each, with the joint holes at their real
+     diameters.
+   - This is the same outline used for packaging, collision checks and the Fusion
+     export, and the check row confirms it matches MATLAB's.
+8. **Roll stiffness** (`rollStiffness`): per axle, k_ride·track²/2 (springs and tyre
    in series) + ARB, in N·m/°. This is the same springs-only model as the MATLAB
    steering envelope.
 
@@ -94,6 +105,7 @@ matched:
 | Bump / droop | exact |
 | Body / hop ζ | within 0.001 |
 | Pivot / pushrod-hole / shock-hole max force | to 1 N |
+| Rocker plate outline | within 1e-9 mm |
 
 After you edit geometry or the spring, the check reads "MATLAB reference no longer
 applies". That is expected.
