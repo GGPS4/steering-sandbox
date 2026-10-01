@@ -1,0 +1,4 @@
+# Team data packages hold TTC-derived tyre coefficients and CAD hardpoints.
+# TTC data-use terms restrict sharing outside member teams: keep them on the team drive.
+*_package.json
+bfsae_sandbox_package*.json
